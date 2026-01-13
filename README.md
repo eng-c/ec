@@ -37,7 +37,7 @@ cargo build --release
 ## Installing
 
 ```bash
-# Install
+# Install systemwide
 sudo make install
 
 # Uninstall
