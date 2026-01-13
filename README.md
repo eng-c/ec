@@ -21,7 +21,11 @@ A compiler that translates English to x86_64 Assembly.
 - ld (GNU linker)
 
 ```bash
-sudo apt install nasm
+# On Debian/Ubuntu
+sudo apt install nasm rust make
+
+# On Fedora
+sudo yum install nasm rust make
 ```
 
 ## Building
