@@ -22,6 +22,7 @@ pub struct CodeGenerator {
     uses_io: bool,
     uses_format: bool,
     uses_time: bool,
+    uses_funcs: bool,
     target_arch: String,
 }
 
@@ -57,6 +58,7 @@ impl CodeGenerator {
             uses_io: false,
             uses_format: false,
             uses_time: false,
+            uses_funcs: false,
             target_arch: "x86_64".to_string(),
         }
     }
@@ -211,6 +213,9 @@ impl CodeGenerator {
             }
             if self.uses_format {
                 result.push_str(&format!("%include \"coreasm/{}/format.asm\"\n", self.target_arch));
+            }
+            if self.uses_funcs {
+                result.push_str(&format!("%include \"coreasm/{}/funcs.asm\"\n", self.target_arch));
             }
         }
         result.push('\n');
@@ -527,13 +532,15 @@ impl CodeGenerator {
             
             Statement::Return { value } => {
                 if let Some(v) = value {
-                    self.generate_expr(v);
+                    self.generate_expr(v); // should leave return value in RAX
                 }
-                self.emit_indent("leave");
-                self.emit_indent("ret");
+                self.emit_indent("FUNC_EPILOGUE");
             }
             
             Statement::FunctionCall { name, args } => {
+                // Mark that we're using functions so funcs.asm gets included
+                self.uses_funcs = true;
+                
                 for (i, arg) in args.iter().enumerate() {
                     self.generate_expr(arg);
                     let reg = match i {
@@ -553,95 +560,105 @@ impl CodeGenerator {
                 let func_label = name.replace(' ', "_").replace('-', "_");
                 self.emit_indent(&format!("call {}", func_label));
             }
-            
+                        
             Statement::FunctionDef { name, params, body, .. } => {
-                // Generate function code separately (will be appended after _start)
-                let func_label = name.replace(' ', "_").replace('-', "_");
+                // Mark that we're using functions so funcs.asm gets included
+                self.uses_funcs = true;
                 
+                let func_label = name.replace(' ', "_").replace('-', "_");
+
                 // Track exported functions for shared library mode
                 if self.shared_lib_mode {
                     self.exported_functions.push(func_label.clone());
                 }
-                
-                // Save current state
+
+                // Save outer codegen state
                 let saved_output = std::mem::take(&mut self.output);
                 let saved_vars = std::mem::take(&mut self.variables);
                 let saved_stack = self.stack_offset;
+
+                // Fresh function-local state
+                self.output = String::new();
+                self.variables = std::collections::HashMap::new(); // or whatever your type is
                 self.stack_offset = 0;
-                
-                // Function prologue
-                self.emit(&format!("{}:", func_label));
-                self.emit_indent("push rbp");
-                self.emit_indent("mov rbp, rsp");
-                
-                // Map parameters to stack (System V ABI: rdi, rsi, rdx, rcx, r8, r9)
-                let param_regs = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"];
-                for (_i, (param_name, _)) in params.iter().enumerate() {
+
+                // ------------------------------------------------------------
+                // PASS 1: Allocate stack slots for params, then generate body
+                // into a temporary buffer to discover the true frame size.
+                // ------------------------------------------------------------
+
+                // Allocate param stack slots FIRST so offsets are stable.
+                for (param_name, _) in params.iter() {
                     self.alloc_var(param_name);
-                    // Don't emit mov yet - we need to allocate stack first
                 }
-                
-                // Pre-scan body to count local variables for stack allocation
-                let mut local_var_count = 0;
-                for stmt in body {
-                    match stmt {
-                        Statement::VarDecl { .. } => local_var_count += 1,
-                        Statement::While { body: while_body, .. } |
-                        Statement::ForRange { body: while_body, .. } |
-                        Statement::ForEach { body: while_body, .. } |
-                        Statement::Repeat { body: while_body, .. } => {
-                            for s in while_body {
-                                if matches!(s, Statement::VarDecl { .. }) {
-                                    local_var_count += 1;
-                                }
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-                
-                // Allocate stack space for parameters + local variables (16-byte aligned)
-                let estimated_stack = self.stack_offset + (local_var_count * 8);
-                let stack_size = (estimated_stack + 15) & !15;
-                if stack_size > 0 {
-                    self.emit_indent(&format!("sub rsp, {}", stack_size));
-                }
-                
-                // Now store parameters after stack is allocated
-                for (i, (param_name, _)) in params.iter().enumerate() {
-                    if i < param_regs.len() {
-                        if let Some(offset) = self.get_var(param_name) {
-                            self.emit_indent(&format!("mov [rbp-{}], {}", offset, param_regs[i]));
-                        }
-                    }
-                }
-                
-                // Generate body
+
+                // Generate body into a temp buffer (this will call alloc_var for locals too)
                 let mut has_return = false;
+
+                let saved_tmp_out = std::mem::take(&mut self.output);
+                self.output = String::new();
+
                 for stmt in body {
                     if matches!(stmt, Statement::Return { .. }) {
                         has_return = true;
                     }
                     self.generate_statement(stmt);
                 }
-                
-                // Function epilogue (only if no explicit return)
+
+                // If no explicit return, add a default epilogue
                 if !has_return {
-                    self.emit_indent("leave");
-                    self.emit_indent("ret");
+                    self.emit_indent("FUNC_EPILOGUE");
                 }
+
+                let body_code = std::mem::take(&mut self.output);
+                self.output = saved_tmp_out;
+
+                // Now we KNOW the frame size needed (params + locals + temps)
+                let frame_size = (self.stack_offset + 15) & !15;
+
+                // ------------------------------------------------------------
+                // PASS 2: Emit the real function with correct prologue + param stores,
+                // then append the already-generated body code.
+                // ------------------------------------------------------------
+
+                self.emit(&format!("{}:", func_label));
+                self.emit_indent(&format!("FUNC_PROLOGUE {}", frame_size));
+
+                // Store parameters after frame is allocated
+                let param_regs = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"];
+                for (i, (param_name, _)) in params.iter().enumerate() {
+                    if let Some(offset) = self.get_var(param_name) {
+                        if i < param_regs.len() {
+                            self.emit_indent(&format!("mov [rbp-{}], {}", offset, param_regs[i]));
+                        } else {
+                            // SysV x86_64: 7th arg is at [rbp+16], then +8 each.
+                            // +8  = return address
+                            // +0  = saved rbp
+                            // so stack args start at +16
+                            let stack_arg_off = 16 + (i - param_regs.len()) * 8;
+                            self.emit_indent(&format!("mov rax, [rbp+{}]", stack_arg_off));
+                            self.emit_indent(&format!("mov [rbp-{}], rax", offset));
+                        }
+                    }
+                }
+
+                // Append the already-generated body
+                self.output.push_str(&body_code);
                 self.emit("");
-                
-                // Store function code and restore state
+
+                // Capture the finished function code
                 let func_code = std::mem::take(&mut self.output);
+
+                // Restore outer codegen state
                 self.output = saved_output;
                 self.variables = saved_vars;
                 self.stack_offset = saved_stack;
-                
-                // Append function to functions section
+
+                // Append to functions section
                 self.functions_section.push_str(&format!("; Function: {}\n", name));
                 self.functions_section.push_str(&func_code);
             }
+
             
             Statement::ForEach { variable, collection, body } => {
                 let start_label = self.new_label("foreach_start");
@@ -1585,26 +1602,57 @@ impl CodeGenerator {
             }
             
             Expr::Range { .. } => {}
-            
+
             Expr::FunctionCall { name, args } => {
-                // Push args in reverse order, then move to registers
                 let param_regs = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"];
-                
-                // Save args to stack first to avoid clobbering
+
+                // 1) Evaluate/push all args right-to-left (so arg0 ends up deepest)
                 for arg in args.iter().rev() {
                     self.generate_expr(arg);
                     self.emit_indent("push rax");
                 }
-                
-                // Pop into registers
-                for i in 0..args.len().min(param_regs.len()) {
+
+                // 2) Pop first 6 args into registers (arg0 -> rdi, arg1 -> rsi, ...)
+                // After the pushes above, the stack top is arg0, so popping in increasing i works.
+                let reg_count = args.len().min(param_regs.len());
+                for i in 0..reg_count {
                     self.emit_indent(&format!("pop {}", param_regs[i]));
                 }
-                
+
+                // 3) At this point, any remaining args (7th+) are still on the stack.
+                // Count how many are left there:
+                let stack_arg_count = args.len().saturating_sub(param_regs.len());
+                let stack_arg_bytes = stack_arg_count * 8;
+
+                // 4) Align stack before call.
+                // In SysV, stack must be 16B-aligned *at the call instruction*.
+                // We can do this by conditionally reserving 8 bytes if needed.
+                // Since we don't know caller alignment here, we maintain an invariant:
+                // - Our function prologue keeps alignment.
+                // - Our pushes/pops here are the only changes.
+                // If stack_arg_count is odd, we currently have an odd *8-byte* subtraction remaining
+                // (because those stack args are still sitting on the stack), which flips alignment.
+                let needs_pad = (stack_arg_count % 2) != 0;
+                if needs_pad {
+                    self.emit_indent("sub rsp, 8  ; align stack before call");
+                }
+
+                // 5) Call
                 let func_label = name.replace(' ', "_").replace('-', "_");
                 self.emit_indent(&format!("call {}", func_label));
+
+                // 6) Clean up stack args + pad (caller cleanup in SysV)
+                let mut cleanup = stack_arg_bytes as i32;
+                if needs_pad {
+                    cleanup += 8;
+                }
+                if cleanup > 0 {
+                    self.emit_indent(&format!("add rsp, {}", cleanup));
+                }
+
+                // Return value already in rax
             }
-            
+
             Expr::ListLit { elements } => {
                 // Allocate memory for list: [length, elem0, elem1, ...]
                 // Each element is 8 bytes

@@ -9,6 +9,7 @@ pub struct Dependencies {
     pub uses_strings: bool,
     pub uses_math: bool,
     pub uses_args: bool,
+    pub uses_funcs: bool,
 }
 
 pub struct Analyzer {
@@ -179,6 +180,7 @@ impl Analyzer {
             }
             
             Statement::FunctionCall { name, args } => {
+                self.deps.uses_funcs = true; // Track that functions are used
                 if !self.functions.contains(name) {
                     let mut err = format!("Unknown function: {}", name);
                     if let Some(suggestion) = find_similar_keyword(name, ENGLISH_KEYWORDS) {
@@ -193,6 +195,7 @@ impl Analyzer {
             
             Statement::FunctionDef { name, params, body, .. } => {
                 self.functions.insert(name.clone());
+                self.deps.uses_funcs = true; // Track that functions are used
                 // Add function parameters to scope
                 for (param_name, _) in params {
                     self.variables.insert(param_name.clone());
@@ -352,6 +355,7 @@ impl Analyzer {
             }
             
             Expr::FunctionCall { name, args } => {
+                self.deps.uses_funcs = true; // Track that functions are used
                 if !self.functions.contains(name) {
                     let mut err = format!("Unknown function: {}", name);
                     if let Some(suggestion) = find_similar_keyword(name, ENGLISH_KEYWORDS) {
