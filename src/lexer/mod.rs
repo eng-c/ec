@@ -485,6 +485,7 @@ impl<'a> Lexer<'a> {
                     match escaped {
                         'n' => result.push('\n'),
                         't' => result.push('\t'),
+                        'r' => result.push('\r'),
                         '\\' => result.push('\\'),
                         '"' => result.push('"'),
                         _ => result.push(escaped),
@@ -511,6 +512,7 @@ impl<'a> Lexer<'a> {
                     match escaped {
                         'n' => result.push('\n'),
                         't' => result.push('\t'),
+                        'r' => result.push('\r'),
                         '\\' => result.push('\\'),
                         '\'' => result.push('\''),
                         _ => result.push(escaped),
