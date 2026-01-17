@@ -1,0 +1,434 @@
+# Shared Libraries Design Document
+
+## Overview
+
+This document outlines the design and implementation considerations for a shared library system in the English compiler. The system allows developers to create reusable libraries that can be linked to other programs at compile time, enabling modular code organization and code reuse across multiple projects.
+
+## Core Concepts
+
+### Library Declaration
+
+Any `.en` file can become a library by adding a library declaration at the beginning:
+
+```
+Library 'lib_name' version '1.0'
+```
+
+When this declaration is present, the compiler will automatically generate both:
+- A `.so` (shared object) file containing the compiled library code
+- A `.lib` (library metadata) file containing library information and function signatures
+
+### Library Metadata (.lib files)
+
+The `.lib` file serves as the public interface for the library and contains:
+
+1. **Library Identification**
+   - Library name and version
+   - Location of the corresponding `.so` file
+
+2. **Table of Contents**
+   - Function signatures available for external use
+   - Parameter types and names
+   - Return type information
+
+Example `.lib` file structure:
+```
+Library "flags" version "0.1".
+Location "/home/josj/scr/english/libs/libflags.so".
+
+Table of Contents:
+    To "hasflag" with a text called "flag".
+    To "isverbose".
+    To "wantshelp".
+    To "getoption" with a text called "flag".
+```
+
+### Library Linking
+
+Programs that want to use a library must include a see statement:
+
+```
+See "Path/to/library.lib" for "lib_name" "version"
+```
+
+This declaration:
+- Automatically links the program to the specified library version
+- No need for explicit `--link` compiler flags
+- Enables compile-time validation of library availability
+
+## Advanced Features
+
+### Multi-Library .so Files
+
+A single `.so` file can contain multiple libraries and different versions. This enables:
+
+- **Backwards Compatibility**: Multiple versions of the same library can coexist
+- **Reduced File Count**: Related libraries can be bundled together
+- **Version Isolation**: Different versions don't interfere with each other
+
+#### Parsing Multi-Library .so Files
+
+The compiler must parse `.so` files from top to bottom, treating each `Library "<name>" version "<ver>"` declaration as a separator between library blocks. The parsing continues until EOF is reached.
+
+### Name Mangling
+
+To prevent conflicts and support versioning, all symbols (functions, types, etc.) are mangled in the raw assembly:
+
+```
+<LIB_NAME>_<VERSION>_<FUNC_NAME>
+```
+
+Examples:
+- `flags_0.1_hasflag`
+- `flags_0.1_isverbose`
+- `flags_1.0_hasflag` (different version, same function name)
+
+This mangling scheme:
+- Enables multiple versions of the same function in one `.so`
+- Prevents naming conflicts between libraries
+- Maintains clean, readable names in `.lib` files
+- Supports backwards compatibility when libraries evolve
+
+## Implementation Considerations
+
+### Compiler Changes
+
+#### 1. Parser Modifications
+- Detect `Library` declarations at file start
+- Parse library name and version
+- Handle multi-library parsing in `.so` files
+- Parse `See` statements for library linking
+
+#### 2. Symbol Table Management
+- Maintain separate symbol tables for each library
+- Implement name mangling for all exported symbols
+- Track library versions and dependencies
+
+#### 3. Code Generation
+- Generate appropriate assembly with mangled names
+- Create `.so` files with proper export tables
+- Generate `.lib` metadata files
+
+#### 4. Linker Integration
+- Resolve library dependencies during compilation
+- Validate library availability and version compatibility
+- Handle multiple library versions in single `.so` files
+
+### English Language Abstraction Considerations
+
+#### High-Level Language Features
+The English compiler provides sophisticated abstractions that must be preserved in shared libraries:
+
+**Property Access Patterns**
+- Expressions like `buffer's size`, `current time's hour` must work across library boundaries
+- Property access generates `PropertyAccess` AST nodes that compile to assembly calls
+- Libraries must export property access functions with mangled names
+
+**Argument/Environment Expressions**
+- `argument's first`, `environment's first` return string pointers
+- These expressions have specific type handling (`VarType::String`)
+- Libraries using these features must include appropriate coreasm dependencies
+
+**Time Expressions**
+- `current time's hour` involves nested property access
+- Time functionality requires `time.asm` coreasm inclusion
+- Libraries using time features must declare this dependency
+
+#### CoreASM Macro System
+The compiler uses a sophisticated macro system that must be handled carefully:
+
+**Macro Dependencies**
+- Libraries must track which coreasm files they use (io.asm, time.asm, etc.)
+- The `shared_lib_mode` flag already exists in `CodeGenerator`
+- Shared libraries exclude coreasm includes but may need selected macros
+
+**Position-Independent Code (PIC)**
+- Shared libraries use `default rel` for RIP-relative addressing
+- This is already implemented in the existing `shared_lib_mode`
+
+**Function Export Mechanism**
+- The `exported_functions` vector tracks functions to export
+- Name mangling must be applied before the `global` directive
+
+#### Type System Integration
+The compiler's type system must work across library boundaries:
+
+**Variable Type Tracking**
+- `variable_types` HashMap tracks `VarType` for each variable
+- Types include: `Integer`, `Float`, `String`, `Buffer`, `Boolean`, `Unknown`
+- Library signatures must include type information
+
+**Expression Type Inference**
+- `is_float_expr()` determines floating-point context
+- Property access on time expressions requires special handling
+- Type information must be preserved in `.lib` files
+
+### Enhanced Name Mangling Strategy
+
+#### Symbol Types Requiring Mangling
+Based on the codebase analysis, these symbols need mangling:
+
+1. **Function Names**
+   - User-defined functions: `flags_0.1_hasflag`
+   - Property access functions: `flags_0.1_buffer_size`
+
+2. **Property Access Functions**
+   - Generated for object properties: `lib_ver_property_name`
+   - Time properties: `lib_ver_current_time_hour`
+
+3. **Built-in Expression Wrappers**
+   - Argument expressions: `lib_ver_argument_first`
+   - Environment expressions: `lib_ver_environment_first`
+   - Time expressions: `lib_ver_current_time`
+
+#### Mangling Implementation
+```rust
+fn mangle_symbol(lib_name: &str, version: &str, symbol: &str) -> String {
+    format!("{}_{}_{}", lib_name, version, symbol.replace(' ', "_").replace('\'', "_"))
+}
+```
+
+### Library Dependency Management
+
+#### CoreASM Feature Tracking
+The compiler already tracks feature usage with boolean flags:
+- `uses_ints`, `uses_floats`, `uses_files`, `uses_buffers`
+- `uses_io`, `uses_format`, `uses_time`, `uses_args`
+
+Libraries must:
+1. Track their own feature usage
+2. Export this information in `.lib` files
+3. Include required macros when generating `.so` files
+
+#### Dependency Resolution
+When linking a program that uses libraries:
+1. Collect all library dependencies recursively
+2. Merge feature requirements
+3. Include necessary coreasm files in the final executable
+4. Resolve symbol conflicts through mangling
+
+### AST and Code Generation Modifications
+
+#### New AST Nodes
+```rust
+// Add to ast.rs
+Statement::LibraryDecl {
+    name: String,
+    version: String,
+},
+
+Statement::SeeStatement {
+    lib_path: String,
+    lib_name: String,
+    version: String,
+},
+```
+
+#### Code Generator Extensions
+```rust
+// Extend CodeGenerator struct
+pub struct CodeGenerator {
+    // ... existing fields
+    current_library: Option<String>,
+    current_version: Option<String>,
+    library_dependencies: Vec<LibraryDependency>,
+}
+
+struct LibraryDependency {
+    name: String,
+    version: String,
+    path: String,
+    exported_functions: Vec<FunctionSignature>,
+}
+```
+
+#### Property Access in Libraries
+Property access expressions need special handling:
+```rust
+Expr::PropertyAccess { object, property } => {
+    if self.shared_lib_mode {
+        // Generate mangled property access function
+        let mangled_name = self.mangle_symbol(&property.to_string());
+        self.emit_indent(&format!("call {}", mangled_name));
+    } else {
+        // Existing property access logic
+        // ... current implementation
+    }
+}
+```
+
+### File System and Build Process
+
+#### Multi-Library .so Structure
+```
+libcombined.so:
+├── Library "flags" version "0.1"
+│   ├── flags_0_1_hasflag
+│   ├── flags_0_1_isverbose
+│   └── flags_0_1_getoption
+├── Library "utils" version "1.2"
+│   ├── utils_1_2_format_string
+│   └── utils_1_2_parse_number
+└── Library "flags" version "1.0"
+    ├── flags_1_0_hasflag (newer version)
+    └── flags_1_0_check_flag (new function)
+```
+
+#### Build Process Integration
+1. **Parse Phase**: Identify library declarations and dependencies
+2. **Analysis Phase**: Validate library availability and versions
+3. **Code Generation Phase**: Generate mangled symbols and export tables
+4. **Link Phase**: Resolve dependencies and create final executable
+
+### Error Handling and Validation
+
+#### Library-Specific Errors
+- **Circular Dependencies**: Detect during analysis phase
+- **Version Conflicts**: Multiple incompatible versions of same library
+- **Missing Symbols**: Referenced but not exported functions
+- **Type Mismatches**: Function signature incompatibilities
+
+#### Runtime Considerations
+- **Symbol Resolution**: Dynamic loading of mangled symbols
+- **Library Initialization**: Proper setup of library state
+- **Error Propagation**: Handle library errors in calling code
+
+### File System Organization
+
+#### Recommended Directory Structure
+```
+project/
+├── libs/
+│   ├── libflags.so
+│   ├── flags.lib
+│   ├── libutils.so
+│   └── utils.lib
+├── src/
+│   └── main.en
+└── build/
+    └── compiled_program
+```
+
+#### Library Discovery
+- Search standard library paths (`/usr/lib/english`, `/usr/local/lib/english`)
+- Support relative and absolute paths in `See` statements
+- Environment variable for additional library paths
+
+### Version Management
+
+#### Semantic Versioning
+- Use semantic versioning (MAJOR.MINOR.PATCH)
+- MAJOR: Breaking changes
+- MINOR: New features, backwards compatible
+- PATCH: Bug fixes, backwards compatible
+
+#### Compatibility Rules
+- Programs specify minimum required version
+- Linker selects appropriate available version
+- Warn about version mismatches
+- Prevent linking to incompatible versions
+
+### Error Handling
+
+#### Library-Related Errors
+- **Library Not Found**: Clear error message with search paths
+- **Version Mismatch**: Specify available vs required versions
+- **Symbol Not Found**: List available symbols in library
+- **Circular Dependencies**: Detect and report dependency cycles
+
+#### Runtime Considerations
+- **Dynamic Loading**: Load libraries at program startup
+- **Symbol Resolution**: Resolve mangled names correctly
+- **Error Recovery**: Graceful handling of missing libraries
+
+## Security Considerations
+
+### Library Validation
+- Validate library file format and integrity
+- Check for malicious code in libraries
+- Implement library signing (optional)
+
+### Sandboxing
+- Restrict library file system access
+- Limit system calls from library code
+- Implement memory isolation between libraries
+
+## Performance Optimizations
+
+### Loading Strategies
+- **Lazy Loading**: Load libraries only when needed
+- **Prelinking**: Resolve symbols at compile time when possible
+- **Caching**: Cache library metadata for faster compilation
+
+### Symbol Resolution
+- **Hash Tables**: Fast symbol lookup in large libraries
+- **Index Files**: Pre-computed symbol indices
+- **Compression**: Compress library metadata
+
+## Future Enhancements
+
+### Dynamic Library Loading
+- Runtime library loading and unloading
+- Plugin architecture support
+- Hot-swappable libraries
+
+### Cross-Language Compatibility
+- C ABI compatibility for interop with other languages
+- Foreign Function Interface (FFI)
+- Wrapper generation for existing libraries
+
+### Package Management
+- Library repository and package manager
+- Automatic dependency resolution
+- Version constraint solving
+
+### Development Tools
+- Library documentation generator
+- Dependency visualization tools
+- Library compatibility checker
+
+## Migration Path
+
+### Phase 1: Basic Library Support
+- Implement single-library `.so` files
+- Basic `.lib` file generation
+- Simple linking mechanism
+
+### Phase 2: Multi-Library Support
+- Multi-library `.so` files
+- Advanced version management
+- Name mangling implementation
+
+### Phase 3: Advanced Features
+- Dynamic loading
+- Package management integration
+- Development tooling
+
+## Testing Strategy
+
+### Unit Tests
+- Library parsing and generation
+- Name mangling correctness
+- Version compatibility checking
+
+### Integration Tests
+- End-to-end library compilation and linking
+- Multi-library `.so` file handling
+- Cross-platform compatibility
+
+### Performance Tests
+- Library loading performance
+- Symbol resolution speed
+- Memory usage optimization
+
+## Conclusion
+
+The shared library system provides a robust foundation for modular development in the English compiler. By supporting versioning, multi-library files, and clean name mangling, it enables both simple use cases and complex dependency management scenarios.
+
+The design prioritizes:
+- **Developer Experience**: Simple syntax, clear error messages
+- **Performance**: Efficient loading and symbol resolution
+- **Compatibility**: Backwards compatibility and version management
+- **Extensibility**: Room for future enhancements and features
+
+This system will significantly enhance the English compiler's capabilities for building large, modular applications while maintaining the language's philosophy of readable, intuitive syntax.
