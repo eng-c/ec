@@ -128,7 +128,7 @@ cargo build --release
 
 ```sh
 # Build and install system-wide
-make build
+make build # Skip this step if installing from .7z 
 sudo make install
 
 # Uninstall
