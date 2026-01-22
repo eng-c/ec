@@ -875,13 +875,10 @@ impl Parser {
             self.expect(&Token::Comma);
             self.skip_noise();
             
-            // Parse body - terminated by paragraph break or EOF
+            // Parse body - terminated by period (single sentence loop body)
             let mut body = Vec::new();
             loop {
-                if matches!(self.current(), Token::ParagraphBreak | Token::EOF) {
-                    break;
-                }
-                if !body.is_empty() && self.is_block_terminator() {
+                if matches!(self.current(), Token::EOF) {
                     break;
                 }
                 
@@ -889,12 +886,17 @@ impl Parser {
                 body.push(stmt);
                 self.skip_noise();
                 
-                if matches!(self.current(), Token::Period | Token::Comma) {
+                if *self.current() == Token::Comma {
+                    // Comma continues to next action in same for loop
                     self.advance();
                     self.skip_noise();
-                    if self.is_block_terminator() || matches!(self.current(), Token::ParagraphBreak | Token::EOF) {
-                        break;
-                    }
+                } else if *self.current() == Token::Period {
+                    // Period ends this for loop's body
+                    self.advance();
+                    self.skip_noise();
+                    break;
+                } else {
+                    break;
                 }
             }
             
@@ -920,13 +922,10 @@ impl Parser {
             self.expect(&Token::Comma);
             self.skip_noise();
             
-            // Parse body - terminated by paragraph break or EOF
+            // Parse body - terminated by period (single sentence loop body)
             let mut body = Vec::new();
             loop {
-                if matches!(self.current(), Token::ParagraphBreak | Token::EOF) {
-                    break;
-                }
-                if !body.is_empty() && self.is_block_terminator() {
+                if matches!(self.current(), Token::EOF) {
                     break;
                 }
                 
@@ -934,12 +933,17 @@ impl Parser {
                 body.push(stmt);
                 self.skip_noise();
                 
-                if matches!(self.current(), Token::Period | Token::Comma) {
+                if *self.current() == Token::Comma {
+                    // Comma continues to next action in same for loop
                     self.advance();
                     self.skip_noise();
-                    if self.is_block_terminator() || matches!(self.current(), Token::ParagraphBreak | Token::EOF) {
-                        break;
-                    }
+                } else if *self.current() == Token::Period {
+                    // Period ends this for loop's body
+                    self.advance();
+                    self.skip_noise();
+                    break;
+                } else {
+                    break;
                 }
             }
             

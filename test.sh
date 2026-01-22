@@ -71,7 +71,7 @@ echo ""
 
 if [[ ! -f "$EC_BIN" ]]; then
     echo -e "${YELLOW}Building compiler...${NC}"
-    cargo build --release --manifest-path "$SCRIPT_DIR/Cargo.toml"
+    make build
     echo ""
 fi
 
