@@ -11,6 +11,7 @@ Close test2.
 
 (Basic file reading)
 open a file for reading called input1 at "./test_io1.txt".
+a buffer called "buffer1" is 1024 bytes in size.
 Read from input1 into buffer1.
 Print "Read from test1: ".
 Print buffer1.
@@ -40,6 +41,7 @@ Close input3.
 
 (Error handling - file not found)
 open a file for reading called missing at "./nonexistent.txt".
+a buffer called "error_buf" is 1024 bytes in size.
 Read from missing into error_buf.
 On error print "File not found error handled".
 
@@ -59,6 +61,7 @@ Print "Modified: ".
 Print byte_buf.
 
 (Appending to files)
+a buffer called "append_content" is 1024 bytes in size.
 open a file for appending called append_test at "./test_append.txt".
 Write "First line" to append_test.
 Close append_test.

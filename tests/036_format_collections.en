@@ -8,6 +8,9 @@ Print "Buffer empty: {data's empty}".
 Print "Buffer full: {data's full}".
 Print "Buffer capacity: {data's capacity}".
 
+a list called "num_list" is [1, 2, 3, 4, 5].
+a list called "word_list" is ["apple", "banana", "cherry"].
+
 (List operations in format strings)
 Print "List size: {num_list's size}".
 Print "List empty: {num_list's empty}".

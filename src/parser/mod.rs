@@ -62,6 +62,42 @@ impl Parser {
         self.make_error_with_suggestion(&msg, &got_str)
     }
     
+    /// Creates an error for invalid buffer size specifications
+    pub fn error_invalid_buffer_size(
+        &self,
+        buffer_name: &str,
+        reason: &str,
+        example: &str,
+    ) -> CompileError {
+        self.err(&format!(
+            "Invalid buffer size for \"{}\": {}\n  \
+             Hint: {}\n  \
+             Example: {}",
+            buffer_name, reason, 
+            "Buffer sizes must be positive integer literals for memory safety.",
+            example
+        ))
+    }
+
+    /// Creates an error for expected token mismatches
+    pub fn error_expected_token(&self, expected: &str, actual: &Token) -> CompileError {
+        self.err(&format!(
+            "Expected '{}' but found '{:?}'\n  \
+             Check your syntax and ensure all keywords are spelled correctly.",
+            expected, actual
+        ))
+    }
+
+    /// Emits a warning for uninitialized buffers (zero capacity)
+    pub fn warn_uninitialized_buffer(&self, buffer_name: &str) {
+        eprintln!(
+            "Warning: Buffer \"{}\" declared without size or initializer.\n  \
+             This creates a zero-capacity buffer which may not be useful.\n  \
+             Consider: a buffer called \"{}\" is 1024 bytes.",
+            buffer_name, buffer_name
+        );
+    }
+    
     /// Check if a token is a reserved keyword and return an error if so.
     /// This catches ALL language keywords, not just a hardcoded subset.
     fn check_not_keyword(&self, token: &Token) -> Result<(), CompileError> {
@@ -530,26 +566,81 @@ impl Parser {
                 
                 self.skip_noise();
                 
-                // Size is now optional - buffers grow dynamically
-                // Accept either just the name, or "is N bytes in size" for backwards compat
-                let size = if self.expect(&Token::Is) {
+                // Parse first, classify second - check for "is" clause
+                if self.expect(&Token::Is) {
                     self.skip_noise();
-                    let s = self.parse_primary()?;
+                    let expr = self.parse_primary()?;
                     self.skip_noise();
-                    self.expect(&Token::Bytes);
-                    self.skip_noise();
-                    if *self.current() == Token::In {
+                    
+                    // Check if this is a size clause (has "bytes" keyword) or an initializer
+                    if *self.current() == Token::Bytes {
+                        // This is a size clause - advance past "bytes"
                         self.advance();
                         self.skip_noise();
-                        self.expect(&Token::Size);
+                        
+                        // Handle optional "in size" suffix
+                        if *self.current() == Token::In {
+                            self.advance();
+                            self.skip_noise();
+                            if !self.expect(&Token::Size) {
+                                return Err(self.error_expected_token("size", self.current()));
+                            }
+                        }
+                        
+                        // Validate that the size expression is a positive integer literal
+                        // This is critical for memory safety - we need compile-time known sizes
+                        match &expr {
+                            Expr::IntegerLit(n) => {
+                                if *n <= 0 {
+                                    return Err(self.error_invalid_buffer_size(
+                                        &name,
+                                        "Buffer size must be a positive integer",
+                                        "a buffer called \"buf\" is 1024 bytes."
+                                    ));
+                                }
+                                // Check for unreasonably large buffer sizes (prevent DoS via memory exhaustion)
+                                const MAX_BUFFER_SIZE: i64 = 1024 * 1024 * 1024; // 1 GB limit
+                                if *n > MAX_BUFFER_SIZE {
+                                    return Err(self.error_invalid_buffer_size(
+                                        &name,
+                                        &format!("Buffer size exceeds maximum allowed ({} bytes)", MAX_BUFFER_SIZE),
+                                        "Consider using smaller buffers or streaming for large data."
+                                    ));
+                                }
+                            }
+                            Expr::Identifier(_var_name) => {
+                                // Allow variable references for size - will be validated at compile time
+                                // This enables patterns like: a buffer called "buf" is config_size bytes.
+                                // The type checker must verify this is a compile-time constant integer
+                            }
+                            _ => {
+                                return Err(self.error_invalid_buffer_size(
+                                    &name,
+                                    "Buffer size must be a numeric literal or constant variable",
+                                    "a buffer called \"buf\" is 1024 bytes."
+                                ));
+                            }
+                        }
+                        
+                        return Ok(Statement::BufferDecl { name, size: expr });
+                    } else {
+                        // No "bytes" keyword - this is an initializer expression
+                        // The buffer will be sized based on the initializer at compile time
+                        return Ok(Statement::VarDecl {
+                            name,
+                            var_type: Some(Type::Buffer),
+                            value: Some(expr),
+                        });
                     }
-                    s
                 } else {
-                    // Default: dynamic buffer (size ignored anyway)
-                    Expr::IntegerLit(0)
-                };
-                
-                return Ok(Statement::BufferDecl { name, size });
+                    // No "is" clause - this is a zero-capacity dynamic buffer
+                    // Emit a warning as this is likely unintentional
+                    self.warn_uninitialized_buffer(&name);
+                    return Ok(Statement::BufferDecl { 
+                        name, 
+                        size: Expr::IntegerLit(0) 
+                    });
+                }
             }
             Token::Timer => {
                 self.advance();
@@ -3443,5 +3534,158 @@ impl Parser {
         }
         
         Err(self.err("Expected 'current time into <name>' after 'get'"))
+    }
+}
+
+// ========================================================================
+// Unit Tests for Buffer Declarations
+// ========================================================================
+
+#[cfg(test)]
+mod buffer_declaration_tests {
+    use super::*;
+    use crate::lexer::Lexer;
+
+    fn parse_input(input: &str) -> Result<Program, CompileError> {
+        let mut lexer = Lexer::new(input);
+        let tokens = lexer.tokenize();
+        let mut parser = Parser::new(tokens);
+        parser.parse()
+    }
+
+    #[test]
+    fn test_buffer_with_string_initializer() {
+        let input = r#"a buffer called "byte_buf" is "Hello"."#;
+        let result = parse_input(input);
+        assert!(result.is_ok());
+        let program = result.unwrap();
+        assert_eq!(program.statements.len(), 1);
+        match &program.statements[0] {
+            Statement::VarDecl { name, var_type, value } => {
+                assert_eq!(name, "byte_buf");
+                assert_eq!(var_type, &Some(Type::Buffer));
+                assert!(matches!(value, Some(Expr::StringLit(_))));
+            }
+            _ => panic!("Expected VarDecl for buffer with initializer"),
+        }
+    }
+
+    #[test]
+    fn test_buffer_with_size_clause() {
+        let input = r#"a buffer called "log" is 2048 bytes."#;
+        let result = parse_input(input);
+        assert!(result.is_ok());
+        let program = result.unwrap();
+        assert_eq!(program.statements.len(), 1);
+        match &program.statements[0] {
+            Statement::BufferDecl { name, size } => {
+                assert_eq!(name, "log");
+                assert!(matches!(size, Expr::IntegerLit(2048)));
+            }
+            _ => panic!("Expected BufferDecl for buffer with size"),
+        }
+    }
+
+    #[test]
+    fn test_buffer_with_size_in_size_suffix() {
+        let input = r#"a buffer called "buf" is 1024 bytes in size."#;
+        let result = parse_input(input);
+        assert!(result.is_ok());
+        let program = result.unwrap();
+        assert_eq!(program.statements.len(), 1);
+        match &program.statements[0] {
+            Statement::BufferDecl { name, size } => {
+                assert_eq!(name, "buf");
+                assert!(matches!(size, Expr::IntegerLit(1024)));
+            }
+            _ => panic!("Expected BufferDecl for buffer with size in size"),
+        }
+    }
+
+    #[test]
+    fn test_buffer_non_numeric_size_error() {
+        let input = r#"a buffer called "bad" is "Hello" bytes."#;
+        let result = parse_input(input);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("numeric literal"));
+    }
+
+    #[test]
+    fn test_buffer_negative_size_error() {
+        let input = r#"a buffer called "bad" is -100 bytes."#;
+        let result = parse_input(input);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("positive integer"));
+    }
+
+    #[test]
+    fn test_buffer_zero_size_error() {
+        let input = r#"a buffer called "bad" is 0 bytes."#;
+        let result = parse_input(input);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("positive integer"));
+    }
+
+    #[test]
+    fn test_buffer_excessive_size_error() {
+        let input = r#"a buffer called "huge" is 9999999999999 bytes."#;
+        let result = parse_input(input);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("exceeds maximum"));
+    }
+
+    #[test]
+    fn test_buffer_with_variable_size() {
+        let input = r#"a buffer called "dynamic" is config_size bytes."#;
+        let result = parse_input(input);
+        assert!(result.is_ok());
+        let program = result.unwrap();
+        assert_eq!(program.statements.len(), 1);
+        match &program.statements[0] {
+            Statement::BufferDecl { name, size } => {
+                assert_eq!(name, "dynamic");
+                assert!(matches!(size, Expr::Identifier(_)));
+            }
+            _ => panic!("Expected BufferDecl for buffer with variable size"),
+        }
+    }
+
+    #[test]
+    fn test_buffer_with_numeric_initializer() {
+        // Without "bytes" keyword, this should be an initializer, not a size
+        let input = r#"a buffer called "data" is 42."#;
+        let result = parse_input(input);
+        assert!(result.is_ok());
+        let program = result.unwrap();
+        assert_eq!(program.statements.len(), 1);
+        match &program.statements[0] {
+            Statement::VarDecl { name, var_type, value } => {
+                assert_eq!(name, "data");
+                assert_eq!(var_type, &Some(Type::Buffer));
+                assert!(matches!(value, Some(Expr::IntegerLit(42))));
+            }
+            _ => panic!("Expected VarDecl for buffer with numeric initializer"),
+        }
+    }
+
+    #[test]
+    fn test_buffer_without_initializer_warning() {
+        let input = r#"a buffer called "empty_buf"."#;
+        let result = parse_input(input);
+        assert!(result.is_ok());
+        let program = result.unwrap();
+        assert_eq!(program.statements.len(), 1);
+        match &program.statements[0] {
+            Statement::BufferDecl { name, size } => {
+                assert_eq!(name, "empty_buf");
+                assert!(matches!(size, Expr::IntegerLit(0)));
+            }
+            _ => panic!("Expected BufferDecl for uninitialized buffer"),
+        }
+        // Note: Warning should be emitted to stderr during parsing
     }
 }

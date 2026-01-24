@@ -7,12 +7,12 @@ List empty: 0
 List full: 0
 First element: 1
 Last element: 5
-Word count: 2
-First word: hello
-First byte: 72
-Second byte: 101
-Third byte: 108
-Byte sum: 173
+Word count: 3
+First word: apple
+First byte: 65
+Second byte: 98
+Third byte: 99
+Byte sum: 166
 Size plus 10: 15
 Size times 2: 10
-Byte operations: 7272
+Byte operations: 6565

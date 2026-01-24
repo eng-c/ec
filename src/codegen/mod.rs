@@ -352,17 +352,45 @@ impl CodeGenerator {
                     ) {
                         self.variable_types.insert(name.clone(), VarType::String);
                     }
-                    self.generate_expr(val);
-                    self.emit_indent(&format!("mov [rbp-{}], rax", offset));
+                    
+                    // Special handling for buffer initialization with string literal
+                    if matches!(var_type, Some(Type::Buffer)) {
+                        if let Expr::StringLit(s) = val {
+                            // For buffer initialized with string, allocate and copy the string
+                            let str_label = self.add_string(s);
+                            let str_len = s.len();
+                            // Allocate buffer with enough capacity (at least string length + 1)
+                            let capacity = std::cmp::max(str_len + 1, 1024);
+                            self.emit_indent(&format!("mov rdi, {}  ; buffer capacity", capacity));
+                            self.emit_indent("call _alloc_buffer");
+                            self.emit_indent(&format!("mov [rbp-{}], rax  ; store buffer pointer", offset));
+                            // Copy string data into buffer using memcpy-style approach
+                            self.emit_indent("mov rdi, rax  ; dest buffer");
+                            self.emit_indent(&format!("lea rsi, [rel {}]  ; source string", str_label));
+                            self.emit_indent(&format!("mov rcx, {}  ; string length", str_len));
+                            self.emit_indent("rep movsb  ; copy bytes");
+                            // Null-terminate the buffer
+                            self.emit_indent("mov byte [rdi], 0");
+                            self.uses_buffers = true;
+                        } else {
+                            // Non-string initializer for buffer - evaluate and store
+                            self.generate_expr(val);
+                            self.emit_indent(&format!("mov [rbp-{}], rax", offset));
+                        }
+                    } else {
+                        self.generate_expr(val);
+                        self.emit_indent(&format!("mov [rbp-{}], rax", offset));
+                    }
                 } else {
                     // No initial value - initialize based on type
                     if let Some(ref t) = var_type {
                         match t {
                             Type::Buffer => {
-                                // Allocate an empty buffer
+                                // Allocate an empty buffer with proper initialization
                                 self.emit_indent("mov rdi, 1024  ; default buffer size");
                                 self.emit_indent("call _alloc_buffer");
                                 self.emit_indent(&format!("mov [rbp-{}], rax", offset));
+                                self.uses_buffers = true;
                             }
                             _ => {
                                 // Initialize to 0/null
