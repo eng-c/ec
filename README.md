@@ -4,9 +4,11 @@
 ![Repo size](https://img.shields.io/github/repo-size/eng-c/ec?style=flat-square)
 ![Last commit](https://img.shields.io/github/last-commit/eng-c/ec?style=flat-square)
 
-**EC** is a minimal systems compiler that translates a constrained, sentence-based English syntax directly into native x86_64 assembly — without a runtime, virtual machine, or standard library.
+**EC** is a minimal systems compiler that translates a constrained, sentence-based English syntax directly into native x86_64 assembly — without a **resident runtime system**, virtual machine, or standard library.
 
-It is an experiment in compiler design, language ergonomics, and low-level systems programming, focused on producing predictable, memory-safe, and extremely small executables.
+The generated binaries consist solely of application code and direct system calls, with no background services, schedulers, garbage collectors, or support libraries.
+
+EC is an experiment in compiler design, language ergonomics, and low-level systems programming, focused on producing predictable, memory-safe, and extremely small executables.
 
 ---
 
@@ -15,7 +17,7 @@ It is an experiment in compiler design, language ergonomics, and low-level syste
 EC explores how far a human-readable, deterministic syntax can be lowered *directly* to native assembly while preserving the kinds of guarantees typically associated with modern systems languages.
 
 The project is intentionally minimal:
-there is no libc, no garbage collector, and no hidden runtime. All abstractions are resolved at compile time, and the generated code consists of straightforward NASM assembly and direct system calls.
+there is no libc, no garbage collector, and no hidden runtime system. All abstractions are resolved at compile time, and the generated code consists of straightforward NASM assembly and direct system calls.
 
 Rather than hiding system behavior, EC aims to make it explicit — just expressed in a readable form.
 
@@ -29,30 +31,64 @@ Instead, it uses a constrained, sentence-based grammar designed to remain readab
 
 The goal is not to “write code like prose”, but to explore an alternative surface syntax that remains precise, analyzable, and predictable at compile time.
 
+For a complete description of the grammar and semantics, see  
+**[LANGUAGE.md](LANGUAGE.md)**.
+
 ---
 
-## Safety Model
+## Memory Safety Model
 
-EC is designed with strong safety guarantees in mind. The core language enforces rules that make common classes of memory errors — including buffer overflows, use-after-free, and double frees — extremely difficult to express.
+Memory safety in EC is achieved without garbage collection, heap tracing, or runtime supervision.  
+All safety guarantees are enforced through compile-time structure and **local, inline checks** emitted directly into the generated assembly.
 
-Memory allocation, ownership, and lifetime are tracked at compile time. Heap-backed structures grow dynamically as needed, and resources such as files, buffers, and timers are automatically released, even if explicit cleanup is omitted.
+### Pointer Abstraction
 
-While EC does not replicate Rust’s type system, it aims for a similar *practical outcome*: predictable, memory-safe programs without requiring a garbage collector or runtime checks.
+User programs never manipulate raw pointers directly.  
+Instead, memory is accessed through compiler-managed buffers, which encapsulate allocation, size tracking, and lifetime.
+
+### Dynamic and Fixed Buffers
+
+- Buffers grow dynamically as needed, with their size tracked explicitly.
+- Fixed-size buffers can be declared and resized in a controlled manner.
+- All buffer operations are lowered to predictable, explicit assembly.
+
+### Bounds-Checked Access
+
+Programs may read or write any byte within a buffer.
+
+If an access attempts to exceed the buffer’s bounds:
+- The operation becomes a **no-op**
+- An **error flag** is set
+- Execution continues, allowing the program to explicitly detect and handle the error
+
+These checks are emitted inline at the access site and do not rely on traps, exceptions, or runtime handlers.
+
+### Resource Tracking and Cleanup
+
+Buffers, file descriptors, and other system resources are tracked by the compiler.
+
+All tracked resources are:
+- Explicitly released when possible
+- Automatically freed or closed on program exit, even if cleanup is omitted
+
+This cleanup is deterministic and non-allocating, and does not involve object tracing or liveness analysis. It is equivalent to explicit teardown code written manually in low-level systems programs.
+
+While EC does not replicate Rust’s type system, it aims for a similar *practical outcome*: predictable, memory-safe programs without a garbage collector or runtime system.
 
 ---
 
 ## Minimal Executables
 
-Because EC compiles directly to relatively simple assembly and avoids a runtime or standard library, the resulting executables are extremely small.
+Because EC compiles directly to simple assembly and avoids a runtime system or standard library, the resulting executables are extremely small.
 
-This property makes EC particularly well-suited for static utilities, constrained environments, and systems-level tooling.
+This makes EC well-suited for static utilities, constrained environments, and systems-level tooling where predictability and size matter more than abstraction depth.
 
 ---
 
 ## Features
 
 * Direct compilation to native x86_64 NASM assembly
-* No libc or runtime; uses direct system calls
+* No resident runtime system or libc; uses direct system calls
 * Deterministic sentence-based syntax
 * Compile-time memory and resource tracking
 * Modular library of core macros with dependency inclusion
@@ -60,22 +96,43 @@ This property makes EC particularly well-suited for static utilities, constraine
 
 ---
 
-## Examples
+## Example Program
 
-EC is best understood by reading complete, working programs.
+Below is a complete EC program reimplementing the Unix `cat` utility.
 
-The repository includes a growing collection of example scripts that demonstrate control flow, file I/O, argument handling, environment access, timing, numeric computation, and resource management. These examples are not pseudocode — they compile to native executables and run without external dependencies.
+This example demonstrates:
+- File I/O
+- Argument handling
+- Buffer reuse
+- Loop expansion over arguments
+- Automatic resource cleanup
 
-Readers are encouraged to browse the examples directory to understand both the language model and the compiler’s lowering strategy.
+```text
+Open a file for writing called "output" at "/dev/stdout".
+Create a buffer called "content".
 
-Included examples demonstrate:
+If arguments's empty then,
+    open a file for reading called "source" at "/dev/stdin",
+    read from source into content,
+    write content to output,
+    close source,
+    exit 0.
 
-* Control systems and conditional logic
-* Reimplementation of Unix utilities (`cat`)
-* Numeric computation and floating-point math
-* Secure file I/O with automatic cleanup
-* Command-line arguments and environment variables
-* Timers and time-based system calls
+Open a file called "source" for reading at each filename from arguments's all treating "-" as "/dev/stdin",
+    read from source into content,
+    write content to output,
+    close source.
+````
+
+The loop expansion construct:
+
+```
+open ... at each X from Y
+```
+
+is resolved entirely at compile time and expands into explicit control flow with no runtime interpretation.
+
+This program compiles to native assembly and produces a working executable without libc, dynamic linking, or a runtime system.
 
 ---
 
@@ -179,6 +236,7 @@ EC is under active development. Planned work includes:
 * JIT compilation or runtime reflection
 * Dynamic typing or implicit control flow
 * Hiding system behavior behind opaque abstractions
+* Language-level runtime systems or background memory management
 
 ---
 
@@ -186,3 +244,4 @@ EC is under active development. Planned work includes:
 
 EC is experimental but functional.
 Core language features are implemented and exercised by real programs, with additional capabilities under active development.
+
