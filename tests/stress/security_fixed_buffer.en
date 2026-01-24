@@ -1,5 +1,4 @@
 print "=== FIXED BUFFER OVERFLOW TEST ===".
-enable error catching.
 
 print "Test 1: Create a tiny fixed buffer (64 bytes)".
 a buffer called "tiny" is 64 bytes in size.
@@ -9,8 +8,8 @@ open a file for writing called out at "./overflow_test.txt".
 a number called "i" is 0.
 
 While i is less than 100,
-    Write "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" to out.
-    Write a newline to out.
+    Write "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" to out,
+    Write a newline to out,
     Increment i.
 
 Close the out.

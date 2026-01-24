@@ -8,8 +8,8 @@ open a file for writing called out at "./huge_test.txt".
 a number called "i" is 0.
 
 While i is less than 10000,
-    Write "Line of text for testing buffer growth capabilities in the dynamic buffer system!" to out.
-    Write a newline to out.
+    Write "Line of text for testing buffer growth capabilities in the dynamic buffer system!" to out,
+    Write a newline to out,
     Increment i.
 
 Close the out.

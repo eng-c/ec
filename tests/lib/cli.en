@@ -8,8 +8,8 @@ To "hasflag" with a text called "flag". Return a number,
     a number called "i" is 1.
     a number called "argc" is arguments's count.
     While i is less than argc,
-        a text called "arg" is argument at i.
-        If arg is equal to flag then, return a number, 1.
+        a text called "arg" is argument at i,
+        If arg is equal to flag then, return a number, 1,
         Increment i.
     Return a number, 0.
 
@@ -30,10 +30,10 @@ To "getoption" with a text called "flag". Return a text,
     a number called "i" is 1.
     a number called "argc" is arguments's count.
     While i is less than argc,
-        a text called "arg" is argument at i.
+        a text called "arg" is argument at i,
         If arg is equal to flag then,
-            a number called "next" is i add 1.
+            a number called "next" is i add 1,
             If next is less than argc then,
-                return a text, argument at next.
+                return a text, argument at next,
         Increment i.
     Return a text, "".
