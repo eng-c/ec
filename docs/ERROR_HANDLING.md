@@ -2,7 +2,7 @@
 
 ## Overview
 
-English provides **memory-safe guarantees** similar to Rust. The error handling system ensures illegal operations are caught at runtime.
+EC provides **memory-safe guarantees** similar to Rust. The error handling system ensures illegal operations are caught at runtime.
 
 ## Runtime Error Detection (Always Active)
 
@@ -47,7 +47,7 @@ jle .ok_label
 
 Executes user-defined actions when an error occurs:
 
-```english
+```ec
 a number called bad is element 100 of nums.
 On error print "Index out of bounds!".
 ```

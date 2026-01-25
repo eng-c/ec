@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
-  "name": "English",
-  "scopeName": "source.english",
+  "name": "EC",
+  "scopeName": "source.ec",
   "patterns": [
     { "include": "#comments" },
     { "include": "#function-definition" },
@@ -21,7 +21,7 @@
   ],
   "repository": {
     "comments": {
-      "name": "comment.block.english",
+      "name": "comment.block.ec",
       "begin": "\\(",
       "end": "\\)",
       "patterns": [
@@ -31,24 +31,32 @@
     "function-definition": {
       "match": "\\b(To)\\s+(\"[^\"]+\")",
       "captures": {
-        "1": { "name": "storage.type.function.english" },
-        "2": { "name": "entity.name.function.definition.english" }
+        "1": { "name": "storage.type.function.ec" },
+        "2": { "name": "entity.name.function.definition.ec" }
       }
     },
     "function-call": {
       "match": "(\"[^\"]+\")\\s+(of|on)\\b",
       "captures": {
-        "1": { "name": "entity.name.function.call.english" },
-        "2": { "name": "punctuation.accessor.english" }
+        "1": { "name": "entity.name.function.call.ec" },
+        "2": { "name": "punctuation.accessor.ec" }
       }
     },
     "strings": {
-      "name": "string.quoted.double.english",
+      "name": "string.quoted.double.ec",
       "begin": "\"",
       "end": "\"",
       "patterns": [
         {
-          "name": "constant.character.escape.english",
+          "match": "(?<!\\{)(\\{)(?!\\{)([^}]*?)(?<!\\})(\\})(?!\\})",
+          "captures": {
+            "1": { "name": "punctuation.section.interpolation.begin.ec" },
+            "2": { "name": "variable.other.interpolation.ec" },
+            "3": { "name": "punctuation.section.interpolation.end.ec" }
+          }
+        },
+        {
+          "name": "constant.character.escape.ec",
           "match": "\\\\."
         }
       ]
@@ -56,56 +64,56 @@
     "loop-expansion": {
       "comment": "Parameter loop expansion: 'each X from Y' - uses entity.name.tag for distinct blue color",
       "match": "\\b(each)\\b",
-      "name": "entity.name.tag.each.english"
+      "name": "entity.name.tag.each.ec"
     },
     "conditional-branch": {
       "comment": "Conditional branching: 'but' keyword - uses support.type for distinct teal/cyan color",
       "match": "\\b(but)\\b",
-      "name": "support.type.english"
+      "name": "support.type.ec"
     },
     "control-keywords": {
-      "name": "keyword.control.english",
+      "name": "keyword.control.ec",
       "match": "\\b(If|if|then|Otherwise|Else|else|While|while|For|for|from|to|Return|return|Exit|exit|Break|break|Continue|continue|Repeat|repeat|times)\\b"
     },
     "action-keywords": {
-      "name": "keyword.other.english",
+      "name": "keyword.other.ec",
       "match": "\\b(Print|print|Set|set|Create|create|Increment|Decrement|increment|decrement|is|are|was|treating|as|enable|disable|error|catching)\\b"
     },
     "io-keywords": {
-      "name": "support.function.english",
+      "name": "support.function.ec",
       "match": "\\b(Open|open|Close|close|Read|read|Write|write|Delete|delete|Resize|resize|reading|writing|appending)\\b"
     },
     "types": {
-      "name": "storage.type.english",
+      "name": "storage.type.ec",
       "match": "\\b(number|text|boolean|buffer|file|float|list|newline)\\b"
     },
     "operators": {
-      "name": "keyword.operator.english",
+      "name": "keyword.operator.ec",
       "match": "\\b(add|subtract|multiply|divide|modulo|plus|minus|greater|less|equal|than|and|or|not)\\b"
     },
     "properties": {
       "match": "('s)\\s*(capacity|size|absolute|sign|even|odd|positive|negative|descriptor|modified|permissions|all|count|first|last)",
       "captures": {
-        "1": { "name": "punctuation.accessor.english" },
-        "2": { "name": "variable.other.property.english" }
+        "1": { "name": "punctuation.accessor.ec" },
+        "2": { "name": "variable.other.property.ec" }
       }
     },
     "articles": {
-      "name": "punctuation.definition.english",
+      "name": "punctuation.definition.ec",
       "match": "\\b(a|an|the|called|with|of|on|at|into|for|in|bytes|size)\\b"
     },
     "booleans": {
-      "name": "constant.language.boolean.english",
+      "name": "constant.language.boolean.ec",
       "match": "\\b(true|false)\\b"
     },
     "numbers": {
       "patterns": [
         {
-          "name": "constant.numeric.float.english",
+          "name": "constant.numeric.float.ec",
           "match": "-?\\b\\d+\\.\\d+\\b"
         },
         {
-          "name": "constant.numeric.integer.english",
+          "name": "constant.numeric.integer.ec",
           "match": "-?\\b\\d+\\b"
         }
       ]

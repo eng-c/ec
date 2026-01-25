@@ -1,7 +1,7 @@
 {
-  "name": "ec-english",
-  "displayName": "English Compiler",
-  "description": "Syntax highlighting for the English programming language (.en files)",
+  "name": "ec",
+  "displayName": "EC",
+  "description": "Syntax highlighting for EC (sentence based code) (.en files)",
   "version": "0.1.0",
   "publisher": "Josjuar Lister",
   "engines": {
@@ -13,16 +13,16 @@
   "contributes": {
     "languages": [
       {
-        "id": "english",
-        "aliases": ["English", "english", "en"],
+        "id": "ec",
+        "aliases": ["EC", "ec", "en"],
         "extensions": [".en", ".eng"],
         "configuration": "./language-configuration.json"
       }
     ],
     "grammars": [
       {
-        "language": "english",
-        "scopeName": "source.english",
+        "language": "ec",
+        "scopeName": "source.ec",
         "path": "./syntaxes/english.tmLanguage.json"
       }
     ],
@@ -30,72 +30,79 @@
       "editor.tokenColorCustomizations": {
         "textMateRules": [
           {
-            "scope": "entity.name.tag.each.english",
+            "scope": "entity.name.tag.each.ec",
             "settings": {
               "foreground": "#4EC9B0",
               "fontStyle": "bold"
             }
           },
           {
-            "scope": "support.type.english",
+            "scope": "support.type.ec",
             "settings": {
               "foreground": "#FF79C6",
               "fontStyle": "bold"
             }
           },
           {
-            "scope": "entity.name.function.definition.english",
+            "scope": "entity.name.function.definition.ec",
             "settings": {
               "foreground": "#DCDCAA",
               "fontStyle": "bold"
             }
           },
           {
-            "scope": "entity.name.function.call.english",
+            "scope": "entity.name.function.call.ec",
             "settings": {
               "foreground": "#DCDCAA"
             }
           },
           {
-            "scope": "punctuation.definition.english",
+            "scope": "punctuation.definition.ec",
             "settings": {
               "foreground": "#56abd3"
             }
           },
           {
-            "scope": "storage.type.english",
+            "scope": "storage.type.ec",
             "settings": {
               "foreground": "#4EC9B0"
             }
           },
           {
-            "scope": "keyword.control.english",
+            "scope": "keyword.control.ec",
             "settings": {
               "foreground": "#C586C0"
             }
           },
           {
-            "scope": "keyword.other.english",
+            "scope": "keyword.other.ec",
             "settings": {
               "foreground": "#C586C0"
             }
           },
           {
-            "scope": "keyword.operator.english",
+            "scope": "keyword.operator.ec",
             "settings": {
               "foreground": "#ebe6be"
             }
           },
           {
-            "scope": "constant.language.boolean.english",
+            "scope": "constant.language.boolean.ec",
             "settings": {
               "foreground": "#569CD6"
             }
           },
           {
-            "scope": "support.function.english",
+            "scope": "support.function.ec",
             "settings": {
               "foreground": "#b0dcaa"
+            }
+          },
+          {
+            "scope": "variable.other.interpolation.ec",
+            "settings": {
+              "foreground": "#F1FA8C",
+              "fontStyle": "bold"
             }
           }
         ]

@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document outlines the planned design for custom types, structs, and objects in English. The goal is to allow users to define their own data structures with properties accessible via the possessive `'s` syntax.
+This document outlines the planned design for custom types, structs, and objects in EC (sentence based code). The goal is to allow users to define their own data structures with properties accessible via the possessive `'s` syntax.
 
 ## Current State
 
@@ -21,7 +21,7 @@ Currently, property access with `'s` is hardcoded for built-in types:
 
 **Key Insight:** After `'s`, the next token should be treated as an **identifier**, not a keyword.
 
-```english
+```ec
 (Currently fails - "left" is a keyword)
 set dog's left leg to 3.
 
@@ -36,7 +36,7 @@ set dog's left leg to 3.
 
 ### 2. Struct Definition Syntax
 
-```english
+```ec
 Define a struct called "Dog" with:
     a text called "name",
     a number called "age",
@@ -47,8 +47,8 @@ Define a struct called "Point" with:
     a number called "y".
 ```
 
-**Alternative (more English-like):**
-```english
+**Alternative (more natural-language-like):**
+```ec
 A Dog has:
     a name (text),
     an age (number),
@@ -61,7 +61,7 @@ A Point has:
 
 ### 3. Struct Instantiation
 
-```english
+```ec
 Create a Dog called "buddy" with name "Buddy", age 3, is good true.
 
 (Or with defaults)
@@ -72,7 +72,7 @@ Set spot's age to 5.
 
 ### 4. Property Access
 
-```english
+```ec
 Print buddy's name.           (prints "Buddy")
 Print buddy's age.            (prints 3)
 If buddy's is good then print "Good dog!".
@@ -80,7 +80,7 @@ If buddy's is good then print "Good dog!".
 
 ### 5. Nested Structs
 
-```english
+```ec
 Define a struct called "Person" with:
     a text called "name",
     a Dog called "pet".
@@ -97,7 +97,7 @@ Print alice's pet's name.     (prints "Fido")
 Built-in "magic" types would be defined internally as structs:
 
 ### Arguments (implicit)
-```english
+```ec
 (Internal definition - not user-visible)
 Arguments has:
     count (number),
@@ -106,7 +106,7 @@ Arguments has:
 ```
 
 ### Current Time (implicit)
-```english
+```ec
 (Internal definition - not user-visible)
 Current Time has:
     hour (number),
@@ -119,7 +119,7 @@ Current Time has:
 ```
 
 ### Lists
-```english
+```ec
 (Every list implicitly has)
     first (element type),
     last (element type),
@@ -173,7 +173,7 @@ Structs are hash maps at runtime:
 - Helpful error messages for typos
 
 ### Phase 5: Methods (Future)
-```english
+```ec
 Define a method on Dog called "bark" that:
     prints "{self's name} says woof!".
 
@@ -208,7 +208,7 @@ mov rax, [rax+8]      ; age at offset 8
 
 ### Definition
 - `Define a struct called "X"` (explicit, clear)
-- `A X has` (more English-like)
+- `A X has` (more natural-language-like)
 - `Create a type called "X"` (verbose)
 
 ### Instantiation

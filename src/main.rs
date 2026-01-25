@@ -131,7 +131,7 @@ fn process_includes(
                 PathBuf::from(path)
             } else {
                 // Check system library path first
-                let system_path = PathBuf::from("/usr/share/english/lib").join(path);
+                let system_path = PathBuf::from("/usr/share/ec/lib").join(path);
                 if system_path.exists() {
                     system_path
                 } else {

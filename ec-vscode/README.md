@@ -1,14 +1,15 @@
-# English Compiler - VSCode Extension
+# EC - VSCode Extension
 
-Syntax highlighting for the English programming language (`.en` files).
+Syntax highlighting for EC (sentence based code) (`.en` files).
 
 ## Features
 
-- **Syntax highlighting** for all English language constructs
+- **Syntax highlighting** for EC language constructs
 - **Comment support** - parenthetical comments `(like this)`
 - **Auto-closing pairs** for brackets, parentheses, and quotes
 - **Code folding** for function definitions
-- **Creative highlighting** for unique English constructs like `each` (loop expansion) and `but` (conditional branching)
+- **Creative highlighting** for unique EC constructs like `each` (loop expansion) and `but` (conditional branching)
+- **Format string interpolation highlighting** - the content inside `{...}` is highlighted distinctly
 
 ## Highlighted Elements
 
@@ -38,22 +39,22 @@ Syntax highlighting for the English programming language (`.en` files).
 **Linux/macOS:**
 ```bash
 # For VSCode
-ln -s /path/to/ec/ec-vscode ~/.vscode/extensions/ec-english
+ln -s /path/to/ec/ec-vscode ~/.vscode/extensions/ec
 
 # For Windsurf
-ln -s /path/to/ec/ec-vscode ~/.windsurf/extensions/ec-english
+ln -s /path/to/ec/ec-vscode ~/.windsurf/extensions/ec
 
 # For Cursor
-ln -s /path/to/ec/ec-vscode ~/.cursor/extensions/ec-english
+ln -s /path/to/ec/ec-vscode ~/.cursor/extensions/ec
 ```
 
 **Windows (PowerShell as Admin):**
 ```powershell
 # For VSCode
-New-Item -ItemType SymbolicLink -Path "$env:USERPROFILE\.vscode\extensions\ec-english" -Target "C:\path\to\ec\ec-vscode"
+New-Item -ItemType SymbolicLink -Path "$env:USERPROFILE\.vscode\extensions\ec" -Target "C:\path\to\ec\ec-vscode"
 
 # For Windsurf
-New-Item -ItemType SymbolicLink -Path "$env:USERPROFILE\.windsurf\extensions\ec-english" -Target "C:\path\to\ec\ec-vscode"
+New-Item -ItemType SymbolicLink -Path "$env:USERPROFILE\.windsurf\extensions\ec" -Target "C:\path\to\ec\ec-vscode"
 ```
 
 Then **reload your editor** (`Ctrl+Shift+P` → "Reload Window").
@@ -70,7 +71,7 @@ Simply copy the `ec-vscode` folder to your extensions directory:
 | Windsurf | `~/.windsurf/extensions/` |
 | Cursor | `~/.cursor/extensions/` |
 
-Rename the copied folder to `ec-english`.
+Rename the copied folder to `ec`.
 
 ### Option 3: Build and Install VSIX Package
 
@@ -85,9 +86,9 @@ cd ec-vscode
 vsce package
 
 # Install the generated .vsix file
-code --install-extension ec-english-0.1.0.vsix
+code --install-extension ec-0.1.0.vsix
 # Or for Windsurf:
-windsurf --install-extension ec-english-0.1.0.vsix
+windsurf --install-extension ec-0.1.0.vsix
 ```
 
 ---
@@ -95,8 +96,8 @@ windsurf --install-extension ec-english-0.1.0.vsix
 ## Verifying Installation
 
 1. Open any `.en` file
-2. Check the language mode in the bottom-right corner of the editor - it should say "English"
-3. If it says "Plain Text", click it and select "English" from the list
+2. Check the language mode in the bottom-right corner of the editor - it should say "EC"
+3. If it says "Plain Text", click it and select "EC" from the list
 
 ---
 
@@ -105,7 +106,7 @@ windsurf --install-extension ec-english-0.1.0.vsix
 **Highlighting not working?**
 - Reload the editor window (`Ctrl+Shift+P` → "Reload Window")
 - Check that the extension folder is named correctly in the extensions directory
-- Verify the `.en` file extension is associated with the "English" language
+- Verify the `.en` file extension is associated with the "EC" language
 
 **Colors look different than expected?**
 - The extension provides default colors, but your theme may override them

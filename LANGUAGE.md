@@ -1,8 +1,8 @@
-# English Language Specification
+# EC Language Specification
 
-**Version 0.1.0**
+**Version 0.1.2**
 
-This document defines the syntax and semantics of the English programming language.
+This document defines the syntax and semantics of EC (sentence based code).
 
 ---
 
@@ -41,7 +41,7 @@ Keywords are **case-insensitive**. These are equivalent:
 
 ### Comments
 
-Comments use **parentheses** `( )` — just like parenthetical remarks in natural English writing.
+Comments use **parentheses** `( )` — just like parenthetical remarks in natural language writing.
 
 ```
 (This is a comment)
@@ -407,7 +407,7 @@ if x is true and y is true and z is true
 
 **Rules:**
 - Subjects are separated by commas
-- The word `and` before the last subject is optional but recommended for natural English
+- The word `and` before the last subject is optional but recommended for natural language readability
 - The predicate after `are` applies to ALL subjects
 - `are not` negates the comparison for all subjects
 
@@ -527,17 +527,22 @@ While <condition>, <statements>.
 
 **Single-line example:**
 ```
-While the counter is less than 10, print the counter. Increment the counter.
+While the counter is less than 10, print the counter, increment the counter.
 ```
 
-**Multi-statement loops** can have multiple period-terminated statements in the body:
+**Multi-action loops** are comma-separated actions within one sentence:
+ 
 ```
-While x is less than 5, print x. Increment x. print "looping".
+While x is less than 5, print x, increment x, print "looping".
 ```
 
 **Loops inside functions** work naturally:
 ```
-To "sum" of a number called "n", a number called "total" is 0. a number called "i" is 1. While i is less than or equal to n, add i to total. Increment i. Return a number, total.
+To "sum" of a number called "n".
+  a number called "total" is 0.
+  a number called "i" is 1.
+  While i is less than or equal to n, total is total add i, i is i add 1.
+  Return a number, total.
 ```
 
 ### For Each Loop
@@ -640,9 +645,6 @@ Print "Hello, {name}! You are {age} years old.".
 | `{var:.N}` | N decimal places | `{pi:.2}` | `3.14` |
 | `{var:N}` | Pad to N characters | `{x:6}` | `    42` |
 | `{var:0N}` | Zero-pad to N chars | `{x:06}` | `000042` |
-| `{var:<N}` | Left-align in N chars | `{x:<6}` | `42    ` |
-| `{var:>N}` | Right-align in N chars | `{x:>6}` | `    42` |
-| `{var:^N}` | Center in N chars | `{x:^6}` | `  42  ` |
 | `{var:x}` | Hexadecimal (lowercase) | `{255:x}` | `0xff` |
 | `{var:X}` | Hexadecimal (uppercase) | `{255:X}` | `0xFF` |
 | `{var:b}` | Binary | `{5:b}` | `101` |
@@ -786,7 +788,7 @@ resize buf to 128.
 
 #### Buffer Byte Access
 
-Read and write individual bytes in buffers and strings by position. Positions are **1-indexed** (like natural English: "the first byte", "the second byte").
+Read and write individual bytes in buffers and strings by position. Positions are **1-indexed** (like natural language: "the first byte", "the second byte").
 
 **Reading bytes:**
 ```
@@ -880,7 +882,7 @@ If names's empty then,
 
 #### List Element Access
 
-Access list elements by index. Indexes are **1-indexed** (like natural English: "the first element", "the second element").
+Access list elements by index. Indexes are **1-indexed** (like natural language: "the first element", "the second element").
 
 **By index:**
 ```
@@ -1090,8 +1092,8 @@ If condition is true then,
 
 #### Safety vs C Comparison
 
-| Issue | C Behavior | English Behavior |
-|-------|------------|------------------|
+| Issue | C Behavior | EC Behavior |
+|-------|------------|-------------|
 | Buffer overflow | Undefined behavior, security vulnerability | Impossible - buffers auto-grow |
 | Forgot to close file | Resource leak | Auto-closed on exit |
 | Forgot to free memory | Memory leak | Auto-freed on exit |
@@ -1547,7 +1549,7 @@ Print "add numbers" of 3 and 5.
 
 ```
 Set the number called counter to 1.
-While the counter is less than 10, print the counter. Increment the counter.
+While the counter is less than 10, print the counter, increment the counter.
 ```
 
 ### FizzBuzz
@@ -1580,7 +1582,7 @@ see "math" version "1.0" from "./libraries/math.so".
 
 **Search paths:**
 1. Relative to current file (`./` or `../`)
-2. System library path (`/usr/share/english/lib/`)
+2. System library path (`/usr/share/ec/lib/`)
 
 **Circular dependencies:** The compiler tracks included files and automatically skips files that have already been included.
 
