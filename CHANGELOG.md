@@ -6,16 +6,18 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Added
-- `each <name> from <buffer>` walks a buffer's bytes as numbers, `byte`
-  allowed as the loop variable (closes the open half of #104).
+## [0.4.15] - 2026-09-06
 
-### Changed
-- auto/enable/disable (and their -matic/-d spellings) are no longer
-  reserved words — the unimplemented auto-error-catching paths are
-  removed (owner ruling).
+A value whose type is only known while the program runs now converts to fit, so a mixed list or map value can no longer crash a program.
 
 ### Fixed
+- **A dynamically-typed value read into a typed variable now casts
+  everywhere, not just at a map read.** #114 covered a map-key read only;
+  a `value` variable, an element/first/last off a list proven mixed, and
+  a call to a `value`-returning function now get the same runtime-tag
+  cast, or the error flag on an undefined cast, instead of copying raw
+  bits. Closes the whole class of SIGSEGVs and stray pointer prints
+  #114's narrower fix left open (#115).
 - **A single-quoted one-word name now resolves inside a `{...}` format-string
   slot, exactly as it already did everywhere else.** `Print "{'tally'}"` used
   to fail with "Unknown variable: 'tally'" for every variable type — the slot
@@ -65,13 +67,6 @@ adheres to [Semantic Versioning](https://semver.org/).
   type exactly as an explicit `... as a text` would (owner ruling); a cast
   the language does not define (a number into a `list`/`map`, or the
   reverse) raises the error flag instead of crashing (#114).
-- **A dynamically-typed value read into a typed variable now casts
-  everywhere, not just at a map read.** #114 covered a map-key read only;
-  a `value` variable, an element/first/last off a list proven mixed, and
-  a call to a `value`-returning function now get the same runtime-tag
-  cast, or the error flag on an undefined cast, instead of copying raw
-  bits. Closes the whole class of SIGSEGVs and stray pointer prints
-  #114's narrower fix left open (#115).
 - **Redeclaring a global as a different kind now names the conflict at the redeclaration, not "Unknown variable" at some later read.** `a list called kept is [].` followed later by `a buffer called kept is 16 bytes in size.` used to report `Unknown variable: kept` at the first function that read `kept`, with a misleading hint about if/otherwise branches; the buffer declaration itself raised no error at all. A buffer declaration now runs the same redeclaration check every other typed declaration already gets, and the analyzer no longer reports a read of a name two declarations disagree on as unknown, since the one diagnostic that matters, "'kept' is already declared as a list", now lands on the second declaration, naming both kinds (#123).
 - **A number, text, or other plain variable declared in every branch of an
   `if`/`otherwise` is now visible after it, exactly as a file handle
@@ -109,6 +104,15 @@ adheres to [Semantic Versioning](https://semver.org/).
   raise the same unrecognised-specifier error #98 already gives an
   unknown base letter, naming the clause as written and the valid forms
   (#127).
+
+### Added
+- `each <name> from <buffer>` walks a buffer's bytes as numbers, `byte`
+  allowed as the loop variable (closes the open half of #104).
+
+### Changed
+- auto/enable/disable (and their -matic/-d spellings) are no longer
+  reserved words — the unimplemented auto-error-catching paths are
+  removed (owner ruling).
 
 ## [0.4.14] - 2026-08-28
 
