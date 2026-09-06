@@ -170,7 +170,7 @@ impl Parser {
         // owned by the outer `parse_conditional_suffix` loop.
         let saved = self.suppress_conditional_suffix;
         self.suppress_conditional_suffix = true;
-        let result = self.parse_block();
+        let result = self.parse_clause_body("a 'but if' branch", Self::parse_block);
         self.suppress_conditional_suffix = saved;
         result
     }
@@ -276,7 +276,7 @@ impl Parser {
         self.expect(&Token::Comma);
         self.skip_noise();
         
-        let then_block = self.parse_block()?;
+        let then_block = self.parse_clause_body("an 'If' branch", Self::parse_block)?;
         
         let mut else_if_blocks = Vec::new();
         let mut else_block = None;
@@ -296,7 +296,7 @@ impl Parser {
                 self.expect(&Token::Then);
                 self.expect(&Token::Comma);
                 self.skip_noise();
-                let block = self.parse_block()?;
+                let block = self.parse_clause_body("an 'Otherwise if' branch", Self::parse_block)?;
                 else_if_blocks.push((cond, block));
                 self.skip_noise();
                 self.consume_period_before_else_chain();
@@ -306,7 +306,7 @@ impl Parser {
                 // Else block consumes the rest of the sentence (comma-separated
                 // actions, ending at the first top-level period). A nested `If`
                 // that owns its own trailing period is parsed as a single action.
-                let block = self.parse_sentence_body()?;
+                let block = self.parse_clause_body("an 'Otherwise' branch", Self::parse_sentence_body)?;
                 else_block = Some(block);
                 break;
             }
@@ -393,7 +393,7 @@ impl Parser {
 
         // Comma continues actions, a period ends this while statement, a
         // paragraph break or EOF ends it. See `parse_loop_body`.
-        let body = self.parse_loop_body()?;
+        let body = self.parse_clause_body("a 'While' loop", Self::parse_loop_body)?;
 
         Ok(Statement::While { condition, body })
     }
@@ -481,6 +481,7 @@ impl Parser {
                 
                 // Parse body - terminated by period (single sentence loop body)
                 let mut body = Vec::new();
+                self.open_clauses.push("a 'For each' loop");
                 loop {
                     if matches!(self.current(), Token::EOF) {
                         break;
@@ -488,11 +489,15 @@ impl Parser {
                     if !body.is_empty() && matches!(self.current(), Token::ParagraphBreak) {
                         break;
                     }
-                    
-                    let stmt = self.parse_statement()?;
+
+                    let stmt = self.parse_statement();
+                    let stmt = match stmt {
+                        Ok(s) => s,
+                        Err(e) => { self.open_clauses.pop(); return Err(e); }
+                    };
                     body.push(stmt);
                     self.skip_noise();
-                    
+
                     if *self.current() == Token::Comma {
                         // Comma continues to next action in same for loop
                         self.advance();
@@ -506,7 +511,8 @@ impl Parser {
                         break;
                     }
                 }
-                
+                self.open_clauses.pop();
+
                 Ok(Statement::ForRange {
                     variable,
                     range: Expr::Range {
@@ -532,6 +538,7 @@ impl Parser {
                 
                 // Parse body - terminated by period
                 let mut body = Vec::new();
+                self.open_clauses.push("a 'For each' loop");
                 loop {
                     if matches!(self.current(), Token::EOF) {
                         break;
@@ -539,11 +546,15 @@ impl Parser {
                     if !body.is_empty() && matches!(self.current(), Token::ParagraphBreak) {
                         break;
                     }
-                    
-                    let stmt = self.parse_statement()?;
+
+                    let stmt = self.parse_statement();
+                    let stmt = match stmt {
+                        Ok(s) => s,
+                        Err(e) => { self.open_clauses.pop(); return Err(e); }
+                    };
                     body.push(stmt);
                     self.skip_noise();
-                    
+
                     if *self.current() == Token::Comma {
                         self.advance();
                         self.skip_noise();
@@ -555,7 +566,8 @@ impl Parser {
                         break;
                     }
                 }
-                
+                self.open_clauses.pop();
+
                 // If treating clause present, wrap variable references in body
                 let body = if let Some((match_val, replacement)) = treating {
                     self.apply_treating_to_body(body, &variable, match_val, replacement)
@@ -585,6 +597,7 @@ impl Parser {
             
             // Parse body - terminated by period (single sentence loop body)
             let mut body = Vec::new();
+            self.open_clauses.push("a 'For each' loop");
             loop {
                 if matches!(self.current(), Token::EOF) {
                     break;
@@ -592,11 +605,15 @@ impl Parser {
                 if !body.is_empty() && matches!(self.current(), Token::ParagraphBreak) {
                     break;
                 }
-                
-                let stmt = self.parse_statement()?;
+
+                let stmt = self.parse_statement();
+                let stmt = match stmt {
+                    Ok(s) => s,
+                    Err(e) => { self.open_clauses.pop(); return Err(e); }
+                };
                 body.push(stmt);
                 self.skip_noise();
-                
+
                 if *self.current() == Token::Comma {
                     // Comma continues to next action in same for loop
                     self.advance();
@@ -610,7 +627,8 @@ impl Parser {
                     break;
                 }
             }
-            
+            self.open_clauses.pop();
+
             // Same range-collection routing as the `from` spelling above
             // (bug #56).
             Ok(Self::for_each_loop(variable, collection, body))
@@ -634,7 +652,7 @@ impl Parser {
         // closes the innermost open clause (rule 1 names `repeat`), a comma
         // continues, a blank line closes (rule 2, applied uniformly at :150).
         // Share `parse_loop_body` so the two cannot drift apart again.
-        let body = self.parse_loop_body()?;
+        let body = self.parse_clause_body("a 'Repeat' loop", Self::parse_loop_body)?;
 
         Ok(Statement::Repeat { count, body })
     }
@@ -1183,7 +1201,7 @@ impl Parser {
         self.skip_noise();
         
         // Parse comma-separated actions until end of sentence
-        let actions = self.parse_sentence_body()?;
+        let actions = self.parse_clause_body("an 'On error' handler", Self::parse_sentence_body)?;
         
         if actions.is_empty() {
             return Err(self.err(

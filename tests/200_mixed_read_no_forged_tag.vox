@@ -1,11 +1,17 @@
-(Stage 1b safety. Reading an element out of a list that widened to Mixed
- yields a value whose type the compiler cannot prove. A declared type on
- the receiving variable states the author's intent, not what the slot
- holds, so it must not be turned into a slot tag: writing TAG_STRING over
- the integer 42 made the tag-dispatching printer treat 42 as a C-string
- pointer and dereference it - a segfault, which no valid Vox program may
- do. The pre-scan marks such values unprovable and the write falls back to
- the integer tag, which renders as a number and never dereferences.)
+(Stage 1b safety, superseded by docs/BUGS_FOUND.md #115. Reading an
+ element out of a list that widened to Mixed yields a value whose type
+ the compiler cannot prove statically. Before #114/#115, the compiler
+ refused to trust the receiving variable's declared type as a slot tag
+ here at all, because nothing had ever verified the payload actually
+ matched it: writing TAG_STRING over the integer 42 made the
+ tag-dispatching printer treat 42 as a C-string pointer and dereference
+ it, a segfault. The old safety net fell back to the integer tag instead
+ - avoiding the crash, but at the cost of silently mislabelling `s`, a
+ declared `text`, as a number wherever it was read in a mixed context.
+ #115's general cast now runs at `s`'s own declaration, so the payload
+ GENUINELY matches its declared type - `s` holds the text "42", not the
+ integer 42 - and it is `s`'s real, cast, declared type that a later
+ mixed-context read (the append below) sees, not a number.)
 
 a list called m is ["a", "b"].
 append 42 to m.

@@ -1,0 +1,14 @@
+(docs/BUGS_FOUND.md #119 - LANGUAGE.md: a name declared in every branch
+ "can be used after the branch and from inside functions, exactly like a
+ top-level declaration". A function reading it, not just main-line code.)
+
+a boolean called 'the marker' is true.
+If 'the marker' then,
+    a number called outcome is 11.
+Otherwise,
+    a number called outcome is 22.
+
+To announce.
+    Print outcome.
+
+announce.

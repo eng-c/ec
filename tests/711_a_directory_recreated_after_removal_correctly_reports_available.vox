@@ -1,0 +1,12 @@
+(Best-effort cleanup from any previous run - errors ignored, no On error check)
+Remove the directory called "/tmp/vox_test_fix121_recreated_dir".
+
+Create a directory called "/tmp/vox_test_fix121_recreated_dir".
+Remove the directory called "/tmp/vox_test_fix121_recreated_dir".
+If "/tmp/vox_test_fix121_recreated_dir" is available then, Print "after removal: available". Otherwise, Print "after removal: unavailable".
+
+Create a directory called "/tmp/vox_test_fix121_recreated_dir".
+If "/tmp/vox_test_fix121_recreated_dir" is available then, Print "after recreate: available". Otherwise, Print "after recreate: unavailable".
+
+(Clean up so the test is repeatable)
+Remove the directory called "/tmp/vox_test_fix121_recreated_dir".

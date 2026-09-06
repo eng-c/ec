@@ -41,7 +41,3 @@ Print "[{n:x}]".
 Print "[{n:04x}]".
 Print "[{n:b}]".
 Print "[{t:6}]".
-
-(What follows the width has to BE a count; these name no precision.)
-Print "[{f:8.}]".
-Print "[{f:8.2z}]".

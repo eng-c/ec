@@ -164,6 +164,17 @@ pub struct Parser {
     // body reaches its statements through `parse_statement`, which is the
     // one door this is counted at.
     statement_depth: usize,
+    // Which kind of clause each currently-open block is, innermost last: an
+    // `If`/`Otherwise` branch, a `While`/`Repeat`/`For each` loop body, or an
+    // `On error` handler. Pushed by the one call site that starts reading a
+    // given block's statements and popped when that block's parse returns
+    // (BUGS_FOUND #122), so `parse_function_def`/`parse_library_decl` can
+    // name the specific clause a `To`/`Library` was refused inside of,
+    // instead of a generic "an 'If', a loop, or a function body" list. Does
+    // NOT get an entry for a function's own body: reaching `To`/`Library`
+    // directly there closes the body instead of erroring (LANGUAGE.md:91),
+    // so that case never consults this stack.
+    open_clauses: Vec<&'static str>,
     // The directory a `see "./x.vox"` resolves against: the directory of the
     // file being parsed. Set from the source filename, or given directly by
     // a caller that displays a file under a different name than it reads it
@@ -230,6 +241,7 @@ impl Parser {
             member_functions: std::collections::HashMap::new(),
             claimed_names: std::collections::HashMap::new(),
             statement_depth: 0,
+            open_clauses: Vec::new(),
             typed_returns: Vec::new(),
             include_base: None,
             included_files: std::collections::HashSet::new(),

@@ -2591,6 +2591,23 @@ impl CodeGenerator {
                             _ => None, // Values: runtime tag, do not guess
                         }
                     }
+                    // An inline list literal falls to the generic `_` arm
+                    // below for anything else - but a HETEROGENEOUS literal
+                    // (`element 2 of [1, "two", 3]`) is exactly as
+                    // runtime-tagged per-slot as the named-list case above,
+                    // and answering the same `Some(Integer)` default the
+                    // named case guards against would do the same damage:
+                    // `emit_load_value_tag` (BUGS_FOUND #115) trusts this
+                    // answer as a STATIC tag and overwrites the real per-slot
+                    // tag `generate_expr` already left in r11 with a
+                    // hardcoded Integer, so a `text`/`number` destination
+                    // casts a string element as if it were the integer it is
+                    // not (`emit_scalar_cast_from_runtime_tag` takes the
+                    // wrong branch and copies raw bits straight through, the
+                    // same crash/leak #115's cast was written to prevent). A
+                    // HOMOGENEOUS literal has one true element type and is
+                    // still answered directly, exactly as before.
+                    Expr::ListLit { .. } if self.list_expr_is_mixed(list) => None,
                     _ => Some(VarType::Integer),
                 }
             }

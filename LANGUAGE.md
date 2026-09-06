@@ -2548,11 +2548,14 @@ print person's "age".    (prints: 36)
 Reading a value into an already-typed destination whose type differs from
 the value's own casts it to the destination's type, exactly as an
 explicit `... as a <type>` would - never the value's raw bits copied
-through. This applies whenever the value's own type cannot be proven at
-compile time (a dynamic key, or a map an `Append`, `Set`, alias or call
-can reach - the same reach `Set` gives the missing-key case below), using
-whichever of the four scalar casts (`number`, `text`, `float`, `boolean`)
-the destination names:
+through. This is a general rule, not a map-only one: it applies to any
+value whose own type cannot be proven at compile time, a map read among
+them (a dynamic key, or a map an `Append`, `Set`, alias or call can reach
+- the same reach `Set` gives the missing-key case below), and equally to a
+`value` variable's payload, an element read off a `list` proven to hold
+more than one type, or the result of a call to a function declared to
+`Return a value`, using whichever of the four scalar casts (`number`,
+`text`, `float`, `boolean`) the destination names:
 
 ```
 a map called bank is {}.

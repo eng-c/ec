@@ -1,2 +1,4 @@
-Unknown variable: kept
-237_a_global_declared_as_both_a_list_and_a_buffer.vox:10:22
+cannot bind 'kept' to a buffer in this declaration; 'kept' is already declared as a list
+237_a_global_declared_as_both_a_list_and_a_buffer.vox:14:17
+note: 'kept' was declared as a list at 237_a_global_declared_as_both_a_list_and_a_buffer.vox:9:15
+help: use a different name here, or declare 'kept' as a buffer instead

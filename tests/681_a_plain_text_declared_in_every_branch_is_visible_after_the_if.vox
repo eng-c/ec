@@ -1,0 +1,9 @@
+(docs/BUGS_FOUND.md #119, the text-typed sibling of 680 - the every-branch
+ rule is not specific to numbers.)
+
+a boolean called ready is true.
+If ready then,
+    a text called label is "yes".
+Otherwise,
+    a text called label is "no".
+Print label.

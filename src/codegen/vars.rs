@@ -577,71 +577,98 @@ impl CodeGenerator {
         self.emit(&format!("{}:", done_label));
     }
 
-    /// docs/BUGS_FOUND.md #114 (owner ruling 2026-08-30). A map key read
-    /// (`_map_lookup`) carries a runtime type tag because a dynamically-built
-    /// map's value types are not known statically (`infer_expr_type` answers
-    /// `None` for `Expr::MapAccess`, same as an untyped mixed-list element).
-    /// Reading such a value into a scalar-typed destination whose declared
-    /// type does not match the payload's actual runtime type used to hand
-    /// the raw bits straight into the slot - a `547` landing in a `text`
-    /// slot is then dereferenced as a `char*` on first string use and
-    /// segfaults. A LITERAL map catches this mismatch statically
-    /// (`check_declared_read_type`); a dynamically-built one cannot, so the
+    /// docs/BUGS_FOUND.md #115, generalising #114 (owner ruling 2026-08-30)
+    /// from its one landing site (`MapAccess`) to every expression whose
+    /// value carries a runtime-only type tag (`expr_has_runtime_only_tag`,
+    /// `src/codegen/tags.rs`): a `value` identifier, an element/first/last of
+    /// a mixed list, a `treating` clause dispatching at runtime, a
+    /// `value`-returning call, or a map key read. None of these has a type
+    /// `infer_expr_type` can prove, so reading one into a scalar-typed
+    /// destination whose declared type does not match the payload's actual
+    /// runtime type used to hand the raw bits straight into the slot - a
+    /// `547` landing in a `text` slot is then dereferenced as a `char*` on
+    /// first string use and segfaults, and a pointer landing in a `number`
+    /// slot prints as a raw address. A LITERAL source catches a mismatch
+    /// statically (`check_declared_read_type`); a dynamic one cannot, so the
     /// answer has to be a runtime one, exactly like #91's miss handling.
     ///
-    /// The owner's ruling: this is not an error, it is an implicit cast to
-    /// the destination's declared type, exactly what an explicit `<value>
-    /// as a <type>` already does for a `value` variable
-    /// (`emit_scalar_cast_from_runtime_tag`, shared with this). Call with
-    /// the read's result already in `rax` (r11 need not be loaded yet - this
-    /// loads it itself, immediately after the `rax` miss check, so no
-    /// intervening call may clobber either register).
+    /// The owner's #114 ruling generalises the same way: this is not an
+    /// error, it is an implicit cast to the destination's declared type,
+    /// exactly what an explicit `<value> as a <type>` already does for a
+    /// `value` variable (`emit_scalar_cast_from_runtime_tag`, shared with
+    /// this). Call with the read's result already in `rax` (r11 need not be
+    /// loaded yet - this loads it itself, immediately after any miss check,
+    /// so no intervening call may clobber either register).
     ///
-    /// A miss (`rax == 0`) is deliberately left untouched here and falls
-    /// through to `emit_empty_value_if_missed`, called right after this at
-    /// every one of this function's call sites: a miss's tag is always
-    /// `TAG_INTEGER` with payload 0, indistinguishable from a genuinely
-    /// stored integer 0, and casting that through this switch would turn
-    /// "absent key into a text" into the text `"0"` instead of #91's empty
-    /// text. Only a non-zero (or non-numeric) hit reaches the cast.
-    pub(crate) fn emit_map_value_cast_if_needed(&mut self, expr: &Expr, slot: Option<VarType>) {
-        if !matches!(expr, Expr::MapAccess { .. }) {
-            return;
+    /// A miss (`rax == 0`) only exists for a *fallible collection read*
+    /// (`is_fallible_collection_read`: `MapAccess`, `ElementAccess`,
+    /// `ListAccess`, `first`/`last` of a mixed list) and is deliberately left
+    /// untouched here, falling through to `emit_empty_value_if_missed`,
+    /// called right after this at every one of this function's call sites: a
+    /// miss's tag is always `TAG_INTEGER` with payload 0, indistinguishable
+    /// from a genuinely stored integer 0, and casting that through this
+    /// switch would turn "absent key into a text" into the text `"0"`
+    /// instead of #91's empty text. A `value` identifier or a
+    /// `value`-returning call has no such ambiguity - there is no lookup to
+    /// miss, so a `0` payload is always cast like any other.
+    ///
+    /// Returns whether the scalar cast actually ran (a matching `slot` on a
+    /// runtime-tagged `expr`). On BOTH its outcomes - a defined conversion or
+    /// `emit_scalar_cast_from_runtime_tag`'s own "no defined cast" fallback
+    /// (empty text, or 0/0.0/false, never a raw pointer or unconverted bit
+    /// pattern) - the destination is left holding a value that genuinely,
+    /// safely matches its declared scalar type. A caller writing into a
+    /// NAMED variable should use this to drop that name from
+    /// `unprovable_scalars` (`src/codegen/collections.rs`'s pre-scan): that
+    /// set exists because a declared type used to not describe what a slot
+    /// actually held, and this call is what now makes it describe it again.
+    pub(crate) fn emit_dynamic_value_cast_if_needed(&mut self, expr: &Expr, slot: Option<VarType>) -> bool {
+        if !self.expr_has_runtime_only_tag(expr) {
+            return false;
         }
         let target_type = match slot {
             Some(VarType::Integer) => Type::Integer,
             Some(VarType::Float) => Type::Float,
             Some(VarType::String) => Type::String,
             Some(VarType::Boolean) => Type::Boolean,
-            _ => return,
+            _ => return false,
         };
-        let done_label = self.new_label("map_cast_done");
-        self.emit_indent("; #114: a present dynamic map value is cast to its destination's type");
-        self.emit_indent("test rax, rax");
-        self.emit_indent(&format!("jz {}  ; a miss: #91 gives the destination's empty value next", done_label));
-        self.emit_load_value_tag(expr);
-        self.emit_scalar_cast_from_runtime_tag(&target_type);
-        self.emit(&format!("{}:", done_label));
+        self.emit_indent("; #115: a dynamically-typed value is cast to its destination's type");
+        if is_fallible_collection_read(expr) {
+            let done_label = self.new_label("dyn_cast_done");
+            self.emit_indent("test rax, rax");
+            self.emit_indent(&format!("jz {}  ; a miss: #91 gives the destination's empty value next", done_label));
+            self.emit_load_value_tag(expr);
+            self.emit_scalar_cast_from_runtime_tag(&target_type);
+            self.emit(&format!("{}:", done_label));
+        } else {
+            self.emit_load_value_tag(expr);
+            self.emit_scalar_cast_from_runtime_tag(&target_type);
+        }
+        true
     }
 
-    /// docs/BUGS_FOUND.md #114, the collection half of the same ruling
-    /// (master's assumption, flagged for the owner). `<number> as a list`
-    /// has no defined meaning - unlike the four scalar casts above, there is
-    /// no existing lowering to reuse - so a map value whose runtime tag is
-    /// not the destination collection's own tag raises the error flag and
-    /// yields that destination's empty value (`emit_empty_value_for`,
-    /// shared with #91's miss handling) rather than storing a scalar
-    /// payload where every later list/map op expects a heap pointer.
+    /// docs/BUGS_FOUND.md #115, the collection half of the same
+    /// generalisation (master's assumption, flagged for the owner, unchanged
+    /// from #114). `<number> as a list` has no defined meaning - unlike the
+    /// four scalar casts above, there is no existing lowering to reuse - so a
+    /// dynamically-typed value whose runtime tag is not the destination
+    /// collection's own tag raises the error flag and yields that
+    /// destination's empty value (`emit_empty_value_for`, shared with #91's
+    /// miss handling) rather than storing a scalar payload where every later
+    /// list/map op expects a heap pointer.
     ///
-    /// A genuine miss (`rax == 0`) is left to `emit_empty_value_if_missed`,
-    /// called right after this at every call site, for the same
-    /// indistinguishable-from-a-real-zero reason `emit_map_value_cast_if_needed`
-    /// documents; this only guards the non-zero, wrong-tag case that miss
-    /// handling does not reach (`_map_lookup`'s `emit_copy_if_collection_reg`
-    /// already copies a correctly-tagged list/map value, so the matching-tag
-    /// path here is a no-op).
-    pub(crate) fn emit_map_value_collection_guard(&mut self, expr: &Expr, slot: Option<VarType>) {
-        if !matches!(expr, Expr::MapAccess { .. }) {
+    /// A genuine miss (`rax == 0`) on a fallible collection read is left to
+    /// `emit_empty_value_if_missed`, called right after this at every call
+    /// site, for the same indistinguishable-from-a-real-zero reason
+    /// `emit_dynamic_value_cast_if_needed` documents; this only guards the
+    /// non-zero, wrong-tag case that miss handling does not reach
+    /// (`_map_lookup`'s `emit_copy_if_collection_reg` already copies a
+    /// correctly-tagged list/map value, so the matching-tag path here is a
+    /// no-op). A non-collection-read source (a `value` identifier, a
+    /// `value`-returning call) has no miss to skip and is always checked.
+    pub(crate) fn emit_dynamic_value_collection_guard(&mut self, expr: &Expr, slot: Option<VarType>) {
+        if !self.expr_has_runtime_only_tag(expr) {
             return;
         }
         let (slot, expect_tag) = match slot {
@@ -649,10 +676,12 @@ impl CodeGenerator {
             Some(VarType::Map) => (VarType::Map, TAG_MAP),
             _ => return,
         };
-        let done_label = self.new_label("map_cast_collection_done");
-        self.emit_indent("; #114: a map value with no defined cast into this collection slot");
-        self.emit_indent("test rax, rax");
-        self.emit_indent(&format!("jz {}  ; a miss: #91 handles it next", done_label));
+        let done_label = self.new_label("dyn_cast_collection_done");
+        self.emit_indent("; #115: a dynamic value with no defined cast into this collection slot");
+        if is_fallible_collection_read(expr) {
+            self.emit_indent("test rax, rax");
+            self.emit_indent(&format!("jz {}  ; a miss: #91 handles it next", done_label));
+        }
         self.emit_load_value_tag(expr);
         self.emit_indent(&format!("cmp r11, {}", expect_tag));
         self.emit_indent(&format!("je {}", done_label));

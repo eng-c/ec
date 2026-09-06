@@ -1,0 +1,20 @@
+(docs/BUGS_FOUND.md #115 - the list-element landing site (the register's
+ own examples). Fixing the general cast surfaced a second, latent bug:
+ `infer_expr_type` answered a hardcoded Integer for ANY element read off
+ an inline list literal, heterogeneous or not, so the cast's own tag load
+ overwrote the real per-slot tag `generate_expr` had already left in r11
+ with that wrong guess. Element 1 (a genuine integer) happened to cast
+ correctly by coincidence; element 2 (a text) was cast as though it were
+ the integer the wrong guess claimed, and its raw pointer passed straight
+ through - into a `text` destination (SIGSEGV) and a `number` destination
+ (prints the address) alike. A heterogeneous literal's element read is
+ now answered as runtime-tagged, matching the named-list case
+ `infer_expr_type` already handled, so the destination decides the cast
+ and "two" correctly fails to parse as a number rather than leaking its
+ address.)
+
+a text called t is element 1 of [1, "two", 3].
+Print "{t}".
+a number called n is element 2 of [1, "two", 3].
+On error Print "error flag set".
+Print "n={n}".

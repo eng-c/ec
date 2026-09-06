@@ -268,6 +268,28 @@ impl CodeGenerator {
         None
     }
 
+    /// docs/BUGS_FOUND.md #115. Whether `e`'s value carries a runtime type
+    /// tag that is never provable statically — the general condition a read
+    /// into a fixed-type destination must guard with the runtime-tag
+    /// cast/refuse #114 introduced for `MapAccess` alone
+    /// (`emit_dynamic_value_cast_if_needed`,
+    /// `emit_dynamic_value_collection_guard`, `src/codegen/vars.rs`).
+    ///
+    /// Exactly `runtime_tag_source(e).is_some()`: a Mixed identifier's shadow
+    /// slot (a `value` local/global, a value parameter, a for-each variable
+    /// over a mixed list), or a fresh read that leaves its tag in r11 right
+    /// after `generate_expr` — a map value, an element/first/last of a mixed
+    /// list, a `treating` clause dispatching at runtime, or a call to a
+    /// `value`-returning function. A statically-typed expression needs no
+    /// guard, the compiler already knows its type matches or a literal-map
+    /// style compile error would have caught a mismatch; and the "nothing
+    /// holds a tag" case (an expression `emit_time_expr_tag` cannot answer
+    /// and that leaves no trace in r11 or a shadow slot) already defaults to
+    /// `TAG_INTEGER` at the point that reads it, never a stray pointer.
+    pub(crate) fn expr_has_runtime_only_tag(&self, e: &Expr) -> bool {
+        self.runtime_tag_source(e).is_some()
+    }
+
     /// Static tag for a *type predicate* operand. Identical to
     /// `emit_time_expr_tag` except that it still trusts a variable's declared
     /// type for an unprovable scalar: a predicate only reads a tag, it never

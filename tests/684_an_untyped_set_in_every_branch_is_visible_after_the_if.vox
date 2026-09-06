@@ -1,0 +1,10 @@
+(docs/BUGS_FOUND.md #119 - `Set x to <value>.` on a fresh name is the
+ untyped spelling of a declaration (docs/BUGS_FOUND.md #92); the
+ every-branch rule has to cover it exactly like the typed spellings above.)
+
+a boolean called 'the marker' is true.
+If 'the marker' then,
+    Set outcome to 11.
+Otherwise,
+    Set outcome to 22.
+Print outcome.

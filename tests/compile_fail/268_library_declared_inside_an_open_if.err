@@ -1,2 +1,3 @@
 A library declaration is defined at the top level, like a function
-Move the declaration above the block it is written in
+an 'If' branch is still open here
+an 'If' branch is still open here: move the declaration above it

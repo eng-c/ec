@@ -1,0 +1,8 @@
+(Best-effort cleanup from any previous run - errors ignored, no On error check)
+Remove the directory called "/tmp/vox_test_fix121_removed_dir".
+
+Create a directory called "/tmp/vox_test_fix121_removed_dir".
+If "/tmp/vox_test_fix121_removed_dir" is available then, Print "before removal: available". Otherwise, Print "before removal: unavailable".
+
+Remove the directory called "/tmp/vox_test_fix121_removed_dir".
+If "/tmp/vox_test_fix121_removed_dir" is available then, Print "after removal: available". Otherwise, Print "after removal: unavailable".

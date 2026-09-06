@@ -8,6 +8,12 @@ part — where I *thought* I'd found a bug and it turned out to be my own mistak
 (mostly comma/period sentence-grouping errors), those are noted at the bottom
 instead, since they're worth knowing about even though they aren't compiler bugs.
 
+## How an entry enters this register
+
+Every entry is re-run against current `main` immediately before it is filed, and records the
+commit it was re-verified at. Candidates can wait in `vox-notes` while the compiler moves on,
+so the check that decides an entry is the one made at filing time.
+
 ---
 
 ### 1. A float routed through `{}` interpolation into `text`/`buffer` prints the raw bit pattern
@@ -12819,30 +12825,38 @@ Two new call-site helpers in `src/codegen/vars.rs`, invoked at every place a `Ma
 
 ### 115. A dynamically-typed value read into a statically-typed variable copies the bits with no runtime tag check, at every landing site except map access: a memory-safety class
 
-**Status:** Open, reported 2026-08-30 (found by the vox-fuzz chaos generator, list-element site; the sibling sites found by master hand-probing; master-verified on both compilers). Severity: memory safety. Generalises #114, whose fix reached only `MapAccess`.
+**Status:** fixed in v0.4.15. Regression test: tests/650_a_value_variable_read_into_a_text_variable_casts_to_text.vox, tests/651_a_heterogeneous_list_element_read_into_a_typed_variable_casts_or_flags.vox, tests/652_a_value_returning_function_call_read_into_a_text_variable_casts_to_text.vox, tests/655_a_dynamic_value_read_into_a_list_variable_has_no_defined_cast.vox
 
 Reading a value whose runtime type is only known dynamically into a fixed-type variable copies the raw bits into the destination slot without checking the runtime tag against the destination type. Using the result as the wrong type dereferences a non-pointer, so a pointer prints where a value belongs, or the program segfaults on use. Landing sites, master-verified on the installed 0.4.14 AND the 0.4.15 #114-fixed compiler:
 ```vox
-a value called v is 42.  a text called t is v.  Print "{t}".            (SIGSEGV, still crashes under the #114 fix)
-a text called t is element 1 of [1, "two", 3].                          (SIGSEGV, still crashes under the #114 fix)
-To 'give' with a number x. Return a value, x. a text called t is 'give' of 7.  (SIGSEGV, still crashes)
-a number called n is element 2 of [1, "two", 3].                        (prints 4198536, a raw pointer)
+a value called v is 42.  a text called t is v.  Print "{t}".            (SIGSEGV before this fix)
+a text called t is element 1 of [1, "two", 3].                          (SIGSEGV before this fix)
+To 'give' with a number x. Return a value, x. a text called t is 'give' of 7.  (SIGSEGV before this fix)
+a number called n is element 2 of [1, "two", 3].                        (printed a raw pointer before this fix)
 ```
-The map-value site (`Set m's "k" to 99. a text called t is m's "k".`) is #114, fixed in v0.4.15. Fix: apply #114's runtime-tag cast (cast to the destination type, or raise the error flag; never copy the bits) at the general "dynamic value read into a typed variable" point so all sites are covered at once. See vox-notes/VERIFIED-DYNAMIC-VALUE-TYPED-READ-CLASS.md.
+The map-value site (`Set m's "k" to 99. a text called t is m's "k".`) is #114, fixed in v0.4.15.
+
+**Fix.** `#114`'s runtime-tag cast (`emit_scalar_cast_from_runtime_tag`, `src/codegen/tags.rs`) is now invoked from a general predicate, `expr_has_runtime_only_tag` (`src/codegen/tags.rs`, exactly `runtime_tag_source(expr).is_some()`), instead of the narrow `matches!(expr, Expr::MapAccess { .. })` gate #114 shipped with. `emit_map_value_cast_if_needed`/`emit_map_value_collection_guard` are renamed `emit_dynamic_value_cast_if_needed`/`emit_dynamic_value_collection_guard` (`src/codegen/vars.rs`) and now fire at every call site already wired for #114 (`Statement::VarDecl`, `Statement::Assignment`, `Statement::Return`, a function call argument) for any expression the predicate accepts: a `value` identifier, an element/first/last read off a list proven mixed, a `treating` clause dispatching at runtime, or a call to a `value`-returning function, on top of the map read #114 already covered. The miss-skip (`rax == 0` treated as an absent key, per #91) now only applies to a genuinely fallible collection read (`is_fallible_collection_read`); a `value` identifier or function call has no such miss and is always cast.
+
+Fixing the list-element site also surfaced a second, latent defect: `infer_expr_type`'s `Expr::ElementAccess` arm answered a hardcoded `Integer` for any element read off an inline list literal, whether or not the literal was heterogeneous, so `emit_load_value_tag` treated that guess as a static tag and overwrote the real per-slot tag already sitting in r11. `infer_expr_type` (`src/codegen/expr.rs`) now answers `None` for a heterogeneous inline list literal too (via `list_expr_is_mixed`), matching the named-list case it already handled correctly.
+
+A cast that succeeds at a named variable's declaration or assignment also re-establishes that name's declared-type invariant for any later mixed-context read (an append, a predicate), so its call sites (`src/codegen/statements.rs`) drop the name from `unprovable_scalars` once the cast has run: a pre-existing safety net (stage 1b) that predates #114 and defaulted such a read to the integer tag specifically because nothing had yet verified the payload matched its declared type. `tests/200_mixed_read_no_forged_tag.vox` pinned that old fallback (`s`, a declared `text`, printed as the number `42` inside a later mixed list); it now pins the corrected behaviour (`s` prints as the text `"42"`), and its header comment is updated to explain why. `src/codegen/tests.rs`'s `declared_type_does_not_forge_a_string_tag` pinned the same fallback at the assembly level and is renamed `declared_type_now_casts_and_is_tagged_correctly`, re-pinned to the new, correct TAG_STRING write; `codegen::tests::type_predicate_on_unprovable_scalar_uses_declared_type`'s blanket "no cmp r11 anywhere" assertion is narrowed to the specific predicate-comparison marker it was actually guarding, since the new cast's own dispatch legitimately adds unrelated `cmp r11,` instructions elsewhere in the same file.
+
+See vox-notes/VERIFIED-DYNAMIC-VALUE-TYPED-READ-CLASS.md.
 
 ---
 
 ### 116. An untyped `Set` that retypes a name it created prints a raw address instead of the value
 
-**Status:** Open, reported 2026-08-30 (master-verified). Severity: memory safety (address leak); plus an open design question on what an untyped `Set` should mean.
+**Status:** fixed in v0.4.15. Regression test: tests/compile_fail/653_an_untyped_set_retype_is_rejected_not_leaked_as_an_address.vox
 
-`Set zoo to 5.` then `Set zoo to "text now".` then `Print zoo.` prints `4198488` (an address). A proper declaration (`a number called zoo is 5.`) gives the correct `cannot assign text to 'zoo', which is a number` on the second `Set`. An untyped `Set NAME to VALUE.` on a name never declared is not in the manual. The address print is a defect under any reading; what an untyped `Set` on a fresh name should do is the owner's call: (a) compile error, (b) declares and type-locks the name, (c) declares a `value`. Register + ruling, then fix.
+`Set zoo to 5.` then `Set zoo to "text now".` then `Print zoo.` was reported printing `4198488` (an address). Re-verified at the base commit for the #115 fix (efc2237), with no code changes and no involvement from the #115 fix: an untyped `Set` on a fresh name already declares and type locks it (`bind_untyped_declaration_type`, docs/BUGS_FOUND.md #95), so the second `Set` is already rejected at compile time with `cannot assign text to 'zoo', which is a number`, the program never runs, and no address is ever printed. This is existing behaviour, predating this fix, not a change made here; the memory safety half of this entry is closed, registered fixed, and pinned with a regression test so it cannot silently regress. The open design question this entry also carried, whether option (a) a compile error, (b) declare and type lock, or (c) declare a `value` is the intended meaning of an untyped `Set` on a fresh name, is NOT settled by this fix; it is left for the owner, noted here only that (b) is what the compiler happens to already do today.
 
 ---
 
 ### 117. A text appended into a caller's list through a parameter prints an address
 
-**Status:** Open, reported 2026-08-30 (master-verified). Severity: memory safety (address leak).
+**Status:** fixed in v0.4.15. Regression test: tests/654_a_text_appended_into_a_callers_list_through_a_parameter_prints_the_value.vox
 
 ```vox
 To 'note' with a list called noted and a text called label.
@@ -12851,13 +12865,13 @@ a list called noted is [].
 'note' of noted and "hi".
 Print "last: {noted's last}".
 ```
-prints `last: 4198536` instead of `hi`. Manual 2337 to 2343 (appends respect each element's actual type; unprovable types widen the list). Tied to the open Q7 ruling (does the caller widen the list, or is the callee refused); decide Q7, then fix.
+was reported printing `last: 4198536` instead of `hi`. The reported repro's own fenced block omits the blank line LANGUAGE.md requires to close a function body, so the parser folds the two lines after `append label to noted.` into the function itself and never runs them at all, a different, unrelated failure from an address leak. With the blank line the manual already requires, the exact same construct compiles and runs cleanly today, printing `last: hi`, unaffected by and unrelated to the #115 fix. The open Q7 ruling this entry also carried (does the caller widen the list, or is the callee refused) is moot for this repro once corrected; it did not need deciding to close this entry.
 
 ---
 
 ### 118. `Set <global> to ...` refuses a list/map/buffer global that a function reads, with the caret on the declaration
 
-**Status:** Open, reported 2026-08-30 (master-verified).
+**Status:** fixed in v0.4.15, no code change required: this is a duplicate of docs/BUGS_FOUND.md #92, already fixed 2026-08-23. Regression test: tests/690_a_global_list_set_after_a_function_reads_it.vox, tests/691_a_global_map_set_after_a_function_reads_it.vox, tests/692_a_global_buffer_set_after_a_function_reads_it.vox.
 
 ```vox
 a list called xs is [].
@@ -12867,11 +12881,13 @@ Print 'how many'.
 ```
 gives `error: Unknown variable: xs` with the caret on line 1. The byte-equivalent `the xs is ["a"].` and bare `xs is ["a"].` both print `1`. No manual rule gives `Set` different rules for globals. Two faults: the refusal, and the wrong caret. Fix both.
 
+**Verified against v0.4.14 HEAD (efc2237) before any change in this pass: this repro already compiles clean and prints `1`.** The list, map and buffer spellings, above and below the reading function, and inside every branch of an if/otherwise, are all pinned green by tests 523 to 531 (added by the docs/BUGS_FOUND.md #92 fix, 2026-08-23). This entry's own repro is byte-for-byte the `c1-global-list-set.vox` candidate in vox-notes/REPORT-CANDIDATES-ROUND-4.md and REPORT-CANDIDATES-ROUND-4-partial.md, both timestamped the morning of 2026-08-23, hours before the #92 fix landed that evening (commit de578cb, "Sun Aug 23 17:30:37 2026 +0100"). The 2026-09-01 chaos-hunt registration sweep (commit 1817c64) says several of its entries "were carried as candidates in vox-notes for some time"; #118 appears to be exactly that: a pre-fix candidate re-registered post-fix without being re-verified against the fixed binary. Three regression tests are added under this bug's own number (690 to 692) since the surface brief asked for them specifically; no source change was needed or made.
+
 ---
 
 ### 119. A file handle (or plain variable) declared inside a branch is treated as undeclared after the branch
 
-**Status:** Open, reported 2026-08-30 (master-verified 2026-08-29; independently re-confirmed by the phase-C chaos generator, which restricts its variable pool to top-level declarations to avoid it).
+**Status:** fixed in v0.4.15. Regression test: tests/680–684.
 
 A declaration inside an `If`/branch body is not seen at a later use even though the branch ran; the use reports `Unknown variable`. See vox-notes/VERIFIED-DECLARATIONS-IN-BRANCHES.md. Fixing it also enriches the chaos generator's pool.
 
@@ -12879,7 +12895,7 @@ A declaration inside an `If`/branch body is not seen at a later use even though 
 
 ### 120. A possessive member call stops parsing at a line break before its preposition
 
-**Status:** Open, reported 2026-08-30 (master-verified 2026-08-29).
+**Status:** fixed in v0.4.15. Regression test: tests/670_a_possessive_instance_call_looks_past_a_line_break_for_its_preposition.vox
 
 `origin's 'scaled'` then a newline then `of 2.` is refused, though a free call with the same line break compiles, and the manual gives no meaning to a line break inside a sentence. A ledger leaf was held out of a merge because of it. See vox-notes/VERIFIED-NEWLINE-BEFORE-PREPOSITION.md.
 
@@ -12887,15 +12903,17 @@ A declaration inside an `If`/branch body is not seen at a later use even though 
 
 ### 121. A removed directory still answers `available`
 
-**Status:** Open, reported 2026-08-30 (master-verified, both compilers).
+**Status:** fixed, not a compiler defect: does not reproduce. Regression tests: tests/710_a_removed_directory_correctly_reports_unavailable.vox, tests/711_a_directory_recreated_after_removal_correctly_reports_available.vox, tests/712_a_deleted_file_correctly_reports_unavailable.vox. Evidence: vox-notes/REPORT-FIX-121.md.
 
 After a successful `Remove the directory`, the path answers `available` = true, though the filesystem confirms it is gone. Deterministic, self-contained repro (harness seed 13). Composition-sensitive to reduce, so seed-13's generated program is the canonical repro. See vox-notes/CANDIDATE-PRC08-STATUS.md.
+
+A removed directory, and a deleted file, both correctly report `unavailable`, and a directory recreated after removal correctly reports `available` again, in every case checked directly against the current compiler. The original finding traced to an inverted guard condition in the vox-fuzz generator that produced the seed-13 repro, not to any defect in the compiler's availability check; the finding did not reproduce.
 
 ---
 
 ### 122. A `To` inside an open `If`/loop body is swallowed into the body
 
-**Status:** Open, reported 2026-08-30 (master-verified; the owner ruled 2026-08-30 that function declarations are not nestable and this should be a compile error).
+**Status:** fixed in v0.4.15. Regression test: tests/compile_fail/265–269, tests/compile_fail/282, tests/compile_fail/283.
 
 A function defined inside a loop body is absorbed into the loop and re-run per iteration, and can silently shadow an import with no warning. The ruling is in hand; the fix is a guard plus one manual sentence stating the rule.
 
@@ -12903,7 +12921,7 @@ A function defined inside a loop body is absorbed into the loop and re-run per i
 
 ### 123. Redeclaring a name as another kind reports "Unknown variable" at the read, not the conflict
 
-**Status:** Open, reported 2026-08-30 (master-verified). Diagnostic quality.
+**Status:** fixed in v0.4.15. Regression test: tests/compile_fail/281_redeclaring_a_global_as_another_kind_names_the_conflict.vox, tests/compile_fail/237_a_global_declared_as_both_a_list_and_a_buffer.vox (strengthened; see below).
 
 ```vox
 a list called kept is [].
@@ -12912,11 +12930,17 @@ a buffer called kept is 16 bytes in size.
 ```
 reports `Unknown variable: kept` at the function's read. The refusal is correct (two declarations genuinely disagree); the message is wrong, because nothing is unknown. The diagnostic should name the conflict and both declaration sites.
 
+**Root cause, two parts.** A buffer's own declaration statement (`Statement::BufferDecl`) is the one typed declaration that never routed through the redeclaration check every other type gets (`Statement::VarDecl`'s call to `bind_variable_type`), so `a buffer called kept is 16 bytes in size.` after `a list called kept is [].` silently re-registered `kept` as a buffer with no diagnostic at all, anywhere. Separately, the whole-program pre-pass that seeds a function body's known globals (`collect_definite_decls`) drops a name entirely from its map the moment two declarations disagree on kind (`DefiniteDecls::poisoned`), so a function reading that name sees nothing declared and reports "Unknown variable", with a misleading "declared only in some branches" hint borrowed from an unrelated heuristic. That spurious error also skewed the shared `symbol_error_counts` occurrence counter, which is how the wrong error's caret landed on the declaration too, instead of the actual conflicting redeclaration.
+
+**Fix.** `Statement::BufferDecl` now runs the same `bind_variable_type` redeclaration check `Statement::VarDecl` does before registering the name, naming both kinds and anchoring on the second declaration exactly like the existing scalar/list/map conflict diagnostic. A new `collect_conflicted_globals` (`src/parser/ast.rs`) exposes the pre-pass's poisoned-name set to the analyzer, and `push_unknown_variable` (`src/analyzer/scope.rs`) now stays silent for a name in that set, trusting the one real conflict diagnostic instead of piling a wrong one on top of it.
+
+**Known related gap, not fixed here (out of this bug's scope).** The reverse order, a buffer declared first and a conflicting kind declared second (`a buffer called kept is 16 bytes in size.` then `a list called kept is [].`), still compiles with no diagnostic at all: `bind_variable_type`'s existing `is_buffer_variable(name)` exemption (written for a construct that binds a new runtime value into an existing buffer's bytes, e.g. a for-range loop reusing a buffer's name) also suppresses the check when the SECOND statement is a genuine explicit typed redeclaration, which is a different case. Worth its own register entry rather than folding into #123's fix, since correcting it means either giving `Statement::VarDecl`'s redeclaration_conflict call a way to tell "content write" apart from "explicit second declaration", or splitting `bind_variable_type`'s exemption.
+
 ---
 
 ### 124. A user-facing error cites LANGUAGE.md by a now-stale line number
 
-**Status:** Open, reported 2026-08-30 (master-verified). Diagnostic quality.
+**Status:** fixed in v0.4.11, a duplicate of #93 part A. Regression test: tests/bugs_found_93_lib_void_result_diagnostic.rs
 
 `src/analyzer/void_results.rs` embeds `(LANGUAGE.md:4963-4965)` and `(LANGUAGE.md:4990)` in an error a user sees when reading the result of a `.lib` entry with no `, returning`; those lines now point at unrelated sections. Every other user-facing diagnostic cites its section by name. Fix: cite by name. Worth bundling with the buffer-capacity doc correction the owner already ruled on (manual says zero capacity; the runtime gives 4096).
 
@@ -12924,7 +12948,7 @@ reports `Unknown variable: kept` at the function's read. The refusal is correct 
 
 ### 125. `Set message to "x".` blames `to` instead of the reserved word the author typed
 
-**Status:** Open, reported 2026-08-30 (master-verified). Diagnostic quality.
+**Status:** fixed in v0.4.11, a duplicate of #94. Regression tests: tests/compile_fail/238 to 251, tests/533 to 540
 
 `Set message to "x".` gives `Cannot use 'to' as a variable name`, caret on `to`. The declaration path gets it right: `'message' is an alternate spelling of the reserved keyword 'text'`. The message should name what the author actually did, matching the sibling path.
 
@@ -12932,7 +12956,7 @@ reports `Unknown variable: kept` at the function's read. The refusal is correct 
 
 ### 126. An unrecognised format specifier is silently discarded
 
-**Status:** Open, reported 2026-08-30 (master-verified).
+**Status:** fixed in v0.4.11, a duplicate of #98. Regression test: tests/compile_fail/252_unrecognised_format_specifier_q.vox
 
 ```vox
 a number called n is 255.
@@ -12944,6 +12968,6 @@ renders `255|255|255|`; `{n:#x}` is the obvious hex typo and silently prints dec
 
 ### 127. A malformed precision `{n:.z}` is silently ignored
 
-**Status:** Open, reported 2026-08-30 (master-verified). Sibling of #126.
+**Status:** fixed in v0.4.15. Regression test: tests/compile_fail/284_a_bare_malformed_precision_is_an_unrecognised_specifier.vox.
 
 `{n:.z}` renders as a bare `{n}` with no diagnostic: the leading-dot precision branch returns before #126's catch-all. Same principle as #126; fold into that fix.

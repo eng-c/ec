@@ -1,0 +1,12 @@
+(docs/BUGS_FOUND.md #118, buffer spelling. Same shape as 690, a buffer
+ global; the write copies new bytes into the buffer rather than replacing
+ it as a value, exactly like `Set greeting to "newer".` on any other
+ top-level buffer.)
+
+a buffer called greeting is "old".
+
+To 'how long'.
+    Return a number, greeting's size.
+
+Set greeting to "much newer".
+Print 'how long'.

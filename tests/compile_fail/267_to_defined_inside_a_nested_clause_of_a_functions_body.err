@@ -1,2 +1,3 @@
 A function is defined at the top level, like a thing
-Move the definition above the block it is written in
+a 'For each' loop is still open here
+a 'For each' loop is still open here: move the definition above it

@@ -1271,12 +1271,20 @@ impl Parser {
     /// the ordinary call-tail parser (plan 310 §4). `origin's 'scaled by' on
     /// 3` and `'scaled by' of origin and 3` therefore build the same call -
     /// there is no second argument grammar to keep in step.
+    ///
+    /// A line break before the preposition is cosmetic (LANGUAGE.md:155,
+    /// :226), same as the free-call callee already gets in
+    /// `expressions.rs`'s `parse_call_tail` caller - so it is skipped here
+    /// too before the connector is tested (#120). A paragraph break is left
+    /// alone: it force-closes the sentence, so `parse_call_tail` correctly
+    /// sees a non-connector and the call stays niladic.
     fn parse_instance_call(
         &mut self,
         function: String,
         receiver: Expr,
     ) -> Result<Expr, Box<CompileError>> {
         let mut args = vec![receiver];
+        self.skip_noise();
         if let Some(Expr::FunctionCall { args: rest, .. }) =
             self.parse_call_tail(function.clone(), true)?
         {
@@ -1792,9 +1800,13 @@ impl Parser {
 
         // The arguments follow the ordinary call preposition, read by the
         // ordinary call-tail parser, so this form shares its argument grammar
-        // with every other call rather than keeping a second one in step.
+        // with every other call rather than keeping a second one in step. A
+        // line break before it is cosmetic (#120), same as the instance
+        // possessive above; a paragraph break still force-closes the
+        // sentence, since only a bare newline is skipped here.
         let name = member_function_name(&thing, &member);
         let mut args = Vec::new();
+        self.skip_noise();
         if let Some(Expr::FunctionCall { args: rest, .. }) =
             self.parse_call_tail(name.clone(), true)?
         {

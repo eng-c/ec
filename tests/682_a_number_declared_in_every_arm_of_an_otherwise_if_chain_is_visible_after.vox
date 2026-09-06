@@ -1,0 +1,12 @@
+(docs/BUGS_FOUND.md #119 - a three-way if/otherwise-if/otherwise chain,
+ still declaring the same name in every arm; only the leading `If`'s own
+ condition is a bare boolean identifier, the shape the bug needed.)
+
+a boolean called first is false.
+If first then,
+    a number called outcome is 11.
+Otherwise if 1 is 2 then,
+    a number called outcome is 22.
+Otherwise,
+    a number called outcome is 33.
+Print outcome.

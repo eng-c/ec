@@ -1,0 +1,7 @@
+(Bug #127: a width followed by a `.` with nothing after it at all -
+ `{n:8.}` - names no precision either; the digits after the dot are
+ empty, not present, so this is the same malformed-precision shape as
+ `{n:8.2z}`, just with zero junk characters instead of one.)
+
+a number called n is 255.
+Print "{n:8.}".

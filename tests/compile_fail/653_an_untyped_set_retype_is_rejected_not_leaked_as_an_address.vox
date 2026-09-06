@@ -1,0 +1,11 @@
+(docs/BUGS_FOUND.md #116 - an untyped `Set` on a fresh name declares and
+ type-locks it (docs/BUGS_FOUND.md #95), exactly like a typed declaration
+ would; a later `Set` of a different type is rejected at compile time
+ with the same diagnostic a typed declaration gives, rather than silently
+ storing the new value's raw bits over the old type and printing an
+ address. This was already the compiler's behaviour by the time #115 was
+ fixed - pinned here so it cannot regress.)
+
+Set zoo to 5.
+Set zoo to "text now".
+Print zoo.

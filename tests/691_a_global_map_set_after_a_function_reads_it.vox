@@ -1,0 +1,9 @@
+(docs/BUGS_FOUND.md #118, map spelling. Same shape as 690, a map global.)
+
+a map called prices is {}.
+
+To 'how many'.
+    Return a number, prices's length.
+
+Set prices to {"apple": 3, "pear": 5}.
+Print 'how many'.

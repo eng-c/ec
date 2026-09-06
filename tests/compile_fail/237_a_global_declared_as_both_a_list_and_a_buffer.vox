@@ -1,8 +1,10 @@
 (Two declarations of one name that disagree about its kind are a real
- conflict, and the definite-declaration walk still refuses to pick a winner:
- `kept` is left out of the map, so the function reading it is refused. The
- fix for docs/BUGS_FOUND.md #92 exempts only a write that names no type -
- this, where both occurrences name one, must stay refused.)
+ conflict, and the definite-declaration walk still refuses to pick a winner.
+ The fix for docs/BUGS_FOUND.md #92 exempts only a write that names no type -
+ this, where both occurrences name one, must stay refused. Refused now with
+ the docs/BUGS_FOUND.md #123 diagnostic: the conflict named, both kinds
+ given, anchored on this second declaration - not, as before the #123 fix,
+ "Unknown variable: kept" anchored on the function's read.)
 
 a list called kept is [].
 

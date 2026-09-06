@@ -1,0 +1,8 @@
+(Bug #127: the leading-dot precision branch of `read_format_spec` returned
+ before #126's catch-all ever saw the clause, so `{n:.z}` rendered as a
+ bare `{n}` with no diagnostic - `z` is not a digit, so there is no
+ precision here at all, and the table has no other shape a bare `.`
+ clause could be.)
+
+a number called n is 255.
+Print "{n:.z}".

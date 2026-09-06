@@ -1,0 +1,8 @@
+(Bugs #126/#127: the fix that refuses a malformed precision after a width
+ must leave a width composed with a bare base letter alone - `{n:8x}` has
+ no dot at all, so it never enters the precision boundary the fix moves,
+ and keeps rendering the digits in hex, padded to width.)
+
+a number called n is 255.
+Print "[{n:8x}]".
+Print "[{n:8}]".
