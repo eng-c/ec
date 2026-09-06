@@ -408,6 +408,17 @@ impl Analyzer {
     }
 
     pub(crate) fn push_unknown_variable(&mut self, name: &str) {
+        // "Unknown" is even more wrong for a name two declarations disagree
+        // on the kind of: it is not unknown, it is contested, and the
+        // analyzer's linear walk already reports that conflict - by name,
+        // naming both kinds, at the second declaration - when it reaches it
+        // (docs/BUGS_FOUND.md #123). A read reached before that, most often
+        // a function's (functions see every global regardless of textual
+        // order), would otherwise report the wrong thing at the wrong site;
+        // stay silent and let the one real diagnostic stand alone.
+        if self.conflicted_globals.contains(name) {
+            return;
+        }
         // "Unknown" is the wrong word for a name the pre-pass has already
         // proved exists: the read is too early, not misspelled, and the way
         // out is to move a line rather than to fix a typo
@@ -649,6 +660,23 @@ impl Analyzer {
             self.active_guards.push(guard.to_string());
         }
 
+        // A fresh declaration made while `active_guard` is pushed lands in
+        // `guarded_scopes[guard]` instead of `self.variables`
+        // (`declare_variable_in_current_scope`), so it is available again
+        // later only where that same guard is re-proven true. That is right
+        // for cross-statement narrowing, but wrong for THIS call's own
+        // result: we are inside the block BECAUSE its guard held, so from
+        // this branch's own point of view the name is unconditionally
+        // declared, exactly like a top-level one (BUGS_FOUND #119 - this is
+        // what let a file handle, which bypasses `guarded_scopes` entirely
+        // and writes `self.variables` directly, survive "declared in every
+        // branch" while a plain `a number called x` did not: `If`'s merge
+        // only ever looks at `always`). The baseline snapshot keeps this to
+        // names THIS call actually added, not everything ever declared
+        // under a same-named guard elsewhere in the program.
+        let guard_baseline: Option<HashSet<String>> = active_guard
+            .map(|g| self.guarded_scopes.get(g).cloned().unwrap_or_default());
+
         let mut terminates = false;
         for stmt in block {
             self.analyze_statement(stmt);
@@ -657,7 +685,14 @@ impl Analyzer {
                 break;
             }
         }
-        let resulting_env = self.current_env();
+        let mut resulting_env = self.current_env();
+        if let (Some(guard), Some(baseline)) = (active_guard, &guard_baseline) {
+            if let Some(current) = resulting_env.guarded.get(guard) {
+                let newly_declared: Vec<String> =
+                    current.difference(baseline).cloned().collect();
+                resulting_env.always.extend(newly_declared);
+            }
+        }
         self.block_depth = saved_block_depth;
         self.active_guards = saved_guards;
         self.apply_env(&saved_env);

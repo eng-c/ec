@@ -1,0 +1,10 @@
+(docs/BUGS_FOUND.md #120 - control case. A free call already looked past a
+ line break before a later argument connector (`and`); this pins that the
+ fix to the possessive-call paths did not disturb it.)
+
+To 'scale' with a number called n and a number called factor.
+  Return n multiply factor.
+
+a number called r is 'scale' with 3
+    and 2.
+Print r.

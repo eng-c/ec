@@ -1,0 +1,14 @@
+(docs/BUGS_FOUND.md #118, list spelling. The register's own repro: a list
+ global read by a function, then written at top level with `Set`, used to
+ refuse with "Unknown variable: xs" and the caret on the declaration. Already
+ fixed by docs/BUGS_FOUND.md #92 (`Set` names no type, so it claims no kind);
+ pinned here under #118's own number since a candidate repro predating that
+ fix was independently registered as #118.)
+
+a list called xs is [].
+
+To 'how many'.
+    Return a number, xs's length.
+
+Set xs to ["a"].
+Print 'how many'.

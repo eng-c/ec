@@ -119,6 +119,33 @@ impl Parser {
         self.statement_depth <= 1
     }
 
+    /// Mark a block's body as open under the given clause name for the
+    /// duration of `parse`, so `innermost_open_clause` can name it if a
+    /// `To`/`Library` is refused somewhere inside (BUGS_FOUND #122). Balanced
+    /// even when `parse` fails, the same way `parse_statement` always
+    /// restores `statement_depth`: compilation aborts on the first error, so
+    /// nothing downstream depends on it, but leaving the two ways of tracking
+    /// "how deep are we" out of step is its own bug waiting to happen.
+    pub(crate) fn parse_clause_body<T>(
+        &mut self,
+        clause: &'static str,
+        parse: impl FnOnce(&mut Self) -> Result<T, Box<CompileError>>,
+    ) -> Result<T, Box<CompileError>> {
+        self.open_clauses.push(clause);
+        let result = parse(self);
+        self.open_clauses.pop();
+        result
+    }
+
+    /// The clause a `To`/`Library` reached right now would be refused inside
+    /// of, for the diagnostic's wording. Never consulted while directly in a
+    /// function's own body (that case closes the body instead of erroring,
+    /// LANGUAGE.md:91), so an empty stack here only means the caller asked
+    /// outside the situation this exists for.
+    pub(crate) fn innermost_open_clause(&self) -> &'static str {
+        self.open_clauses.last().copied().unwrap_or("an open clause")
+    }
+
     fn dispatch_statement(&mut self) -> Result<Statement, Box<CompileError>> {
         self.skip_all_whitespace();
 

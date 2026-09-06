@@ -1,0 +1,4 @@
+cannot bind 'kept' to a buffer in this declaration; 'kept' is already declared as a list
+281_redeclaring_a_global_as_another_kind_names_the_conflict.vox:12:17
+note: 'kept' was declared as a list at 281_redeclaring_a_global_as_another_kind_names_the_conflict.vox:7:15
+help: use a different name here, or declare 'kept' as a buffer instead

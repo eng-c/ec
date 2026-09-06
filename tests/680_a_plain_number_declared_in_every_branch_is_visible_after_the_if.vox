@@ -1,0 +1,12 @@
+(docs/BUGS_FOUND.md #119 - LANGUAGE.md's "Declarations in Branches" rule
+ says "a variable (or file handle)" declared in EVERY branch of an
+ if/otherwise definitely exists afterwards. The file-handle half already
+ worked; a plain typed variable did not when the if's own condition was a
+ bare boolean identifier - exactly this shape.)
+
+a boolean called 'the marker' is true.
+If 'the marker' then,
+    a number called outcome is 11.
+Otherwise,
+    a number called outcome is 22.
+Print outcome.

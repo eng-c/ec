@@ -1,0 +1,13 @@
+(Compile-fail: BUGS_FOUND #122 - the same specific-clause naming as 281,
+ for the `Otherwise` branch of an `If`/`otherwise` chain rather than a
+ loop, proving the naming is not hard-coded to whichever clause kind #96's
+ own regression tests happened to cover.)
+
+If 1 is 2 then,
+    Print "unreachable".
+Otherwise,
+    Print "before",
+To examine with a value called given.
+    Print "{given's type}".
+
+examine of "".

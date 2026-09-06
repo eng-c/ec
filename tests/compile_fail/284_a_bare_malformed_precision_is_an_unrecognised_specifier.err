@@ -1,0 +1,3 @@
+'.z' is not a format specifier Vox knows
+284_a_bare_malformed_precision_is_an_unrecognised_specifier.vox:8:11
+help: the specifiers are a width (`N`), a zero-padded width (`0N`), a decimal precision (`.N`), and a whole number's base - `x` (hexadecimal), `X` (hexadecimal, uppercase), `b` (binary) or `o` (octal), which a width can precede (`04x`). Drop the specifier to render the value plainly.

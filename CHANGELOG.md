@@ -65,6 +65,50 @@ adheres to [Semantic Versioning](https://semver.org/).
   type exactly as an explicit `... as a text` would (owner ruling); a cast
   the language does not define (a number into a `list`/`map`, or the
   reverse) raises the error flag instead of crashing (#114).
+- **A dynamically-typed value read into a typed variable now casts
+  everywhere, not just at a map read.** #114 covered a map-key read only;
+  a `value` variable, an element/first/last off a list proven mixed, and
+  a call to a `value`-returning function now get the same runtime-tag
+  cast, or the error flag on an undefined cast, instead of copying raw
+  bits. Closes the whole class of SIGSEGVs and stray pointer prints
+  #114's narrower fix left open (#115).
+- **Redeclaring a global as a different kind now names the conflict at the redeclaration, not "Unknown variable" at some later read.** `a list called kept is [].` followed later by `a buffer called kept is 16 bytes in size.` used to report `Unknown variable: kept` at the first function that read `kept`, with a misleading hint about if/otherwise branches; the buffer declaration itself raised no error at all. A buffer declaration now runs the same redeclaration check every other typed declaration already gets, and the analyzer no longer reports a read of a name two declarations disagree on as unknown, since the one diagnostic that matters, "'kept' is already declared as a list", now lands on the second declaration, naming both kinds (#123).
+- **A number, text, or other plain variable declared in every branch of an
+  `if`/`otherwise` is now visible after it, exactly as a file handle
+  already was.** A file handle worked because it always registered
+  directly as a global declaration; a plain variable instead only counted
+  toward a branch's own guard bucket whenever that branch's condition was
+  a bare boolean, so the check for "declared on every path" never saw it
+  and a later read failed with `used before it is declared`, contradicting
+  LANGUAGE.md's "Declarations in Branches" rule. A branch's own guarded
+  declarations now also count toward what it definitely declares (#119).
+- **A `To`/`Library` definition refused for starting inside an open clause
+  now names the specific clause it is still inside, instead of a generic
+  list of every clause kind a definition might ever be nested in.** The
+  refusal itself dates to #96; the message now says, for example, that
+  "a `While` loop is still open here" or "an `Otherwise` branch is still
+  open here", naming whichever `If`/`Otherwise` branch, loop, or `On
+  error` handler actually applies (#122).
+- **A possessive member call now looks past a line break before its
+  preposition, exactly as a free call already did.** `origin's 'scaled'`
+  followed by a line break then `of 2` used to refuse with "Expected a
+  statement, got Of", closing the sentence early even though a single
+  line break is cosmetic and only a period or a paragraph break can end
+  a clause; the same statement on one line, or a free call across the
+  same line break, already compiled. Both possessive-call forms (the
+  instance form and the type form, `a <type>'s 'member' <prep> <arg>`)
+  now skip a line break before testing for the connector, the same as
+  the free-call path; a paragraph break before the preposition still
+  force-closes the sentence (#120).
+- **A malformed decimal precision in a format slot is now a compile error,
+  never a silent no-op.** `{n:.z}` used to render as a bare `{n}`, and a
+  width followed by a `.` that named no precision (`{n:8.2z}`, `{n:8.}`)
+  fell through the same gap: the leading-dot precision reader, and the one
+  for a precision written after a width, both returned without a
+  diagnostic whenever what followed the dot was not all digits. Both now
+  raise the same unrecognised-specifier error #98 already gives an
+  unknown base letter, naming the clause as written and the valid forms
+  (#127).
 
 ## [0.4.14] - 2026-08-28
 

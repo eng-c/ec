@@ -1,0 +1,9 @@
+(docs/BUGS_FOUND.md #115 - the `value`-variable landing site: #114 only
+ cast a map-value read, so a `value` local's runtime-tagged payload was
+ still copied as raw bits into a mismatched destination. Reading a
+ `value` into a `text` used to SIGSEGV on first print; the general fix
+ casts it exactly as `v as a text` would.)
+
+a value called v is 42.
+a text called t is v.
+Print "{t}".

@@ -763,6 +763,20 @@ pub fn collect_definite_decls(stmts: &[Statement]) -> std::collections::HashMap<
     collect_definite_decls_inner(stmts).kinds
 }
 
+/// Names two or more top-level declarations disagree on the kind of (docs/
+/// BUGS_FOUND.md #123) - `a list called kept is [].` then `a buffer called
+/// kept is 16 bytes in size.`, say. Such a name is removed from
+/// `collect_definite_decls`'s map entirely (see `DefiniteDecls::record`), so
+/// a function reading it sees nothing declared at all and reports "Unknown
+/// variable" instead of the real story: two declarations that genuinely
+/// disagree, which the analyzer's own linear walk rejects at the second one
+/// with the proper conflict diagnostic. The analyzer uses this set to
+/// silence that misleading "Unknown variable" for a name already headed for
+/// its own, better error.
+pub fn collect_conflicted_globals(stmts: &[Statement]) -> std::collections::HashSet<String> {
+    collect_definite_decls_inner(stmts).poisoned
+}
+
 /// One statement sequence's definite declarations, plus the two facts the
 /// merge of an if/otherwise chain needs in order to stay faithful: which
 /// names were poisoned, and which are held only by a write that named no

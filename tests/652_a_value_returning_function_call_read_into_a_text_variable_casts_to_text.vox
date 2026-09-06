@@ -1,0 +1,11 @@
+(docs/BUGS_FOUND.md #115 - the function-return landing site: a function
+ declared to `Return a value` hands the caller a runtime-tagged result in
+ r11, and reading that call straight into a `text` used to SIGSEGV the
+ same way a dynamic map value did before #114. The general fix casts it
+ exactly as `'give' of 7 as a text` would.)
+
+To 'give' with a number x.
+    Return a value, x.
+
+a text called t is 'give' of 7.
+Print "{t}".

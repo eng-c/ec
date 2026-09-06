@@ -564,7 +564,16 @@ pub(crate) fn read_format_spec(fmt: Option<&str>) -> (FormatSpec, Option<FormatS
         // Float precision format like .2, .4, etc.
         let digits = &fmt_str[1..];
         return match read_count(digits) {
-            CountRead::None => (spec, None),
+            // `.N` promises a count after the dot; nothing there at all
+            // (`{n:.}`) or something that is not all digits (`{n:.z}`) is
+            // not a precision Vox defines, and used to render as a bare
+            // `{n}` with no diagnostic - the same silent drop #98 refused
+            // for a bad base letter, left open here until #127
+            // (docs/BUGS_FOUND.md #127).
+            CountRead::None => (
+                spec,
+                Some(FormatSpecFault::UnknownSpecifier(fmt_str.to_string())),
+            ),
             CountRead::Count(n) => {
                 spec.precision = Some(n);
                 (spec, None)
@@ -657,7 +666,21 @@ pub(crate) fn read_format_spec(fmt: Option<&str>) -> (FormatSpec, Option<FormatS
     if has_width && remaining.starts_with('.') {
         let precision_digits = &remaining[1..];
         match read_count(precision_digits) {
-            CountRead::None => {}
+            // `{n:8.}` and `{n:8.2z}` used to stay the quiet no-op `{n:8}`
+            // is, on the reasoning that what follows the width is not a
+            // count and so is simply not a precision - #85's own boundary,
+            // pinned by name in the comment this replaces. #127 overturns
+            // that: the width half is fine, but the clause as a whole is
+            // still not one the table defines, and a bad precision after a
+            // width is no less silent than a bad base letter after one
+            // (`{n:8q}`, which #98 already refuses) - so it is refused the
+            // same way, on the whole clause (docs/BUGS_FOUND.md #127).
+            CountRead::None => {
+                if fault.is_none() {
+                    fault = Some(FormatSpecFault::UnknownSpecifier(fmt_str.to_string()));
+                }
+                remaining = "";
+            }
             CountRead::Count(n) => {
                 spec.precision = Some(n);
                 remaining = "";
@@ -689,15 +712,12 @@ pub(crate) fn read_format_spec(fmt: Option<&str>) -> (FormatSpec, Option<FormatS
                 // specific complaint, so it wins and this one is dropped
                 // (docs/BUGS_FOUND.md #98).
                 //
-                // A `remaining` that still starts with `.` only gets here
-                // by way of the width+precision block above deciding what
-                // follows is not a count (`8.`, `8.2z`) and leaving it
-                // untouched on purpose - that boundary is already settled
-                // (`a_width_followed_by_something_that_is_not_a_count_is_not_a_fault`)
-                // and #98 does not move it: a dangling `.` after a width is
-                // a different clause shape from an unknown specifier letter,
-                // not one more instance of it.
-                if fault.is_none() && !remaining.starts_with('.') {
+                // `remaining` can no longer start with `.` here: the
+                // width+precision block above now consumes a dangling `.`
+                // itself, whether or not what follows it is a count
+                // (docs/BUGS_FOUND.md #127), so every shape this catch-all
+                // still sees is a genuine unknown specifier letter.
+                if fault.is_none() {
                     fault = Some(FormatSpecFault::UnknownSpecifier(fmt_str.to_string()));
                 }
                 // If we parsed a width but no base, treat as decimal

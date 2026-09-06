@@ -1,0 +1,14 @@
+(docs/BUGS_FOUND.md #123: `kept` declared as a list, read by a function, then
+ redeclared as a buffer. The two declarations genuinely disagree, so refusal
+ is correct - but the diagnostic must land on the second declaration, say
+ `kept` is already declared, and name both kinds, not report "Unknown
+ variable: kept" at the function's read, as it used to.)
+
+a list called kept is [].
+
+To 'how many'.
+    Return a number, kept's length.
+
+a buffer called kept is 16 bytes in size.
+
+Print 'how many'.

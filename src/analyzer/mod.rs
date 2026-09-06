@@ -48,6 +48,13 @@ pub struct Analyzer {
     in_function_scope: bool,
     block_depth: usize,
     global_variables: HashSet<String>,
+    /// Names two top-level declarations disagree on the kind of (docs/
+    /// BUGS_FOUND.md #123) - present here instead of `global_variables`.
+    /// A read of one of these is not genuinely unknown; the real diagnostic
+    /// is the conflict itself, reported once at the second declaration, so
+    /// `push_unknown_variable` checks this set to stay silent rather than
+    /// pile a misleading "Unknown variable" on top of it.
+    conflicted_globals: HashSet<String>,
     /// Declared flag name -> its declared value type. A set was not
     /// enough: every flag then answered `boolean` to a type query,
     /// which mis-typed text and number flags read inside a function
@@ -272,6 +279,7 @@ impl Analyzer {
             in_function_scope: false,
             block_depth: 0,
             global_variables: HashSet::new(),
+            conflicted_globals: HashSet::new(),
             flag_variables: HashMap::new(),
             buffer_variables: HashSet::new(),
             list_variables: HashSet::new(),

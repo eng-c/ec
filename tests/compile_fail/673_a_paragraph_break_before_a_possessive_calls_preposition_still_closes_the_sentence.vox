@@ -1,0 +1,19 @@
+(docs/BUGS_FOUND.md #120 - the fix skips a single line break before an
+ instance/type possessive call's preposition, but must not over-reach: a
+ blank line (paragraph break) still force-closes the sentence, same as
+ everywhere else in the language, so `of 2.` below is refused as its own
+ unfinished statement.)
+
+A thing called point has
+  a number called x is 0,
+  a number called y is 0.
+
+To 'scaled' with a point called corner and a number called factor.
+  Return a number, corner's x multiply factor.
+
+a point called origin.
+Set origin's x to 3.
+a number called c1 is origin's 'scaled'
+
+    of 2.
+Print c1.

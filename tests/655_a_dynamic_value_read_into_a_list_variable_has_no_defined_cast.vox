@@ -1,0 +1,14 @@
+(docs/BUGS_FOUND.md #115, the undefined-cast fallback generalised to a
+ NEW landing site: #114's own test 645 already pins this for a map value;
+ this is the same guard on a `value` variable instead. `<number> as a
+ list` has no defined meaning, so a `value` holding a number read into a
+ `list` slot raises the error flag and takes the destination's own empty
+ value, exactly like a missed read, rather than storing the number's raw
+ bits as a list pointer and segfaulting on first use.)
+
+a value called v is 42.
+a list called xs is v.
+On error Print "error flag set".
+Print "xs: {xs}".
+Append "z" to xs.
+Print "after append: {xs}".

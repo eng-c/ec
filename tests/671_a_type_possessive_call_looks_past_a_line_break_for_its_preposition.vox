@@ -1,0 +1,16 @@
+(docs/BUGS_FOUND.md #120 - the type possessive (`a <type>'s 'member' <prep>
+ <arg>`) shares the same call-tail parser as the instance possessive, so a
+ line break before its preposition must be cosmetic here too.)
+
+A thing called point has
+  a function called 'placed at',
+  a number called x is 0.
+
+To do the point's 'placed at', with a number called x.
+  a point called plotted.
+  Set plotted's x to x.
+  Return a point, plotted.
+
+The corner is a point's 'placed at'
+    with 7.
+Print corner's x.

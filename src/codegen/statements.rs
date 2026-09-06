@@ -753,9 +753,10 @@ impl CodeGenerator {
                             Some(t) => declared_slot_vartype(t),
                             None => self.variable_types.get(name).cloned(),
                         };
-                        // #114, before #91: a present dynamic map value is
-                        // cast to (or, with no defined cast, refused into)
-                        // the destination's declared type. `declared_slot_vartype`
+                        // #115, before #91: a present dynamically-typed value
+                        // (generalises #114's map-value-only cast) is cast to
+                        // (or, with no defined cast, refused into) the
+                        // destination's declared type. `declared_slot_vartype`
                         // above only names the pointer types #91 needs (String/
                         // List/Map); the cast covers every scalar destination
                         // (Integer/Float/Boolean too), so it is resolved
@@ -764,8 +765,17 @@ impl CodeGenerator {
                             Some(t) => Some(vartype_of_declared_type(t)),
                             None => self.variable_types.get(name).cloned(),
                         };
-                        self.emit_map_value_cast_if_needed(val, cast_slot_type.clone());
-                        self.emit_map_value_collection_guard(val, cast_slot_type);
+                        if self.emit_dynamic_value_cast_if_needed(val, cast_slot_type.clone()) {
+                            // The cast just made `name`'s slot genuinely
+                            // match its declared type (see the doc comment
+                            // on `emit_dynamic_value_cast_if_needed`), so the
+                            // pre-scan's conservative "declared type may not
+                            // describe this slot" label no longer applies -
+                            // a later mixed-context read (an append, a
+                            // predicate) may trust the declared type again.
+                            self.unprovable_scalars.remove(name);
+                        }
+                        self.emit_dynamic_value_collection_guard(val, cast_slot_type);
                         self.emit_empty_value_if_missed(val, slot_type);
                         // docs/BUGS_FOUND.md #108: a global `freeable_texts`
                         // text frees the string it replaces (see
@@ -941,12 +951,18 @@ impl CodeGenerator {
                         } else {
                             self.generate_expr(value);
                         }
-                        // #114, before #91: a present dynamic map value is
-                        // cast to (or, with no defined cast, refused into)
+                        // #115, before #91: a present dynamically-typed value
+                        // is cast to (or, with no defined cast, refused into)
                         // the local's declared type.
-                        self.emit_map_value_cast_if_needed(
-                            value, self.variable_types.get(name).cloned());
-                        self.emit_map_value_collection_guard(
+                        if self.emit_dynamic_value_cast_if_needed(
+                            value, self.variable_types.get(name).cloned()) {
+                            // See the matching comment on the declaration
+                            // site above: the cast just re-established the
+                            // declared-type invariant, so it is safe to
+                            // trust again in a later mixed context.
+                            self.unprovable_scalars.remove(name);
+                        }
+                        self.emit_dynamic_value_collection_guard(
                             value, self.variable_types.get(name).cloned());
                         // #91, the assignment half of the declaration guard.
                         self.emit_empty_value_if_missed(
@@ -1005,10 +1021,16 @@ impl CodeGenerator {
                         } else {
                             self.generate_expr(value);
                         }
-                        // #114, the global mirror of the local cast guard.
-                        self.emit_map_value_cast_if_needed(
-                            value, self.variable_types.get(name).cloned());
-                        self.emit_map_value_collection_guard(
+                        // #115, the global mirror of the local cast guard.
+                        if self.emit_dynamic_value_cast_if_needed(
+                            value, self.variable_types.get(name).cloned()) {
+                            // See the matching comment on the local site
+                            // above: the cast just re-established the
+                            // declared-type invariant, so it is safe to
+                            // trust again in a later mixed context.
+                            self.unprovable_scalars.remove(name);
+                        }
+                        self.emit_dynamic_value_collection_guard(
                             value, self.variable_types.get(name).cloned());
                         // #91, the global mirror of the same guard.
                         self.emit_empty_value_if_missed(
@@ -1313,17 +1335,18 @@ impl CodeGenerator {
                         .current_function_return_type
                         .as_ref()
                         .and_then(declared_slot_vartype);
-                    // #114, before #91: `Return a text, m's "k".` casts a
-                    // present dynamic map value to the declared return type.
-                    // Resolved separately from `return_slot` above, which
-                    // only names #91's pointer types (String/List/Map) - the
-                    // cast also covers a scalar Integer/Float/Boolean return.
+                    // #115, before #91: `Return a text, m's "k".` (or any
+                    // other dynamically-typed return expression) casts the
+                    // present value to the declared return type. Resolved
+                    // separately from `return_slot` above, which only names
+                    // #91's pointer types (String/List/Map) - the cast also
+                    // covers a scalar Integer/Float/Boolean return.
                     let cast_return_slot = self
                         .current_function_return_type
                         .as_ref()
                         .map(vartype_of_declared_type);
-                    self.emit_map_value_cast_if_needed(v, cast_return_slot.clone());
-                    self.emit_map_value_collection_guard(v, cast_return_slot);
+                    self.emit_dynamic_value_cast_if_needed(v, cast_return_slot.clone());
+                    self.emit_dynamic_value_collection_guard(v, cast_return_slot);
                     self.emit_empty_value_if_missed(v, return_slot);
                     // A `value` return carries its runtime tag in r11 for the
                     // caller. Load it AFTER generate_expr (which leaves r11=tag

@@ -1,0 +1,8 @@
+(Bugs #126/#127: refusing a malformed precision after a width - `{n:8.}`,
+ `{n:8.2z}` - must not touch the WELL-formed pair right beside it. `{n:8.2}`
+ and `{n:08.2}` still read both halves and keep both: the precision decides
+ the digits, the width decides the padding (docs/BUGS_FOUND.md #85).)
+
+a number called n is 255.
+Print "[{n:8.2}]".
+Print "[{n:08.2}]".

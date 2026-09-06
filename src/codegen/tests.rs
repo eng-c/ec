@@ -202,10 +202,20 @@
     }
 
     #[test]
-    fn declared_type_does_not_forge_a_string_tag() {
-        // A declared type is the author's intent, not a proof about the bits
-        // that land in the slot. Tagging an unprovable value TAG_STRING makes
-        // the tag-dispatching printer dereference whatever integer is there.
+    fn declared_type_now_casts_and_is_tagged_correctly() {
+        // docs/BUGS_FOUND.md #115 supersedes the old safety net this test
+        // used to pin (formerly `declared_type_does_not_forge_a_string_tag`):
+        // before #114/#115, nothing verified that a value read from an
+        // unprovable dynamic source actually matched its destination's
+        // declared type, so the append below deliberately withheld
+        // TAG_STRING rather than risk the tag-dispatching printer
+        // dereferencing an integer as a pointer. #115's general cast now
+        // runs at `s`'s own declaration and GENUINELY makes the payload
+        // text ("42", not the integer 42) - so `s` is no longer unprovable
+        // (`emit_dynamic_value_cast_if_needed`'s caller drops it from
+        // `unprovable_scalars` the moment the cast succeeds,
+        // `src/codegen/statements.rs`) and the append below writes the
+        // real, now-safe TAG_STRING rather than forging one.
         let asm = compile_to_asm(
             "a list called m is [\"a\", \"b\"].\n\
              append 42 to m.\n\
@@ -214,8 +224,8 @@
              append s to out.\n",
         );
         assert!(
-            !asm.contains("mov edx, 1  ; element type tag"),
-            "an unprovable value must not be written with TAG_STRING"
+            asm.contains("mov edx, 1  ; element type tag"),
+            "a value the #115 cast has verified as text must be written with TAG_STRING"
         );
     }
 
@@ -910,6 +920,18 @@ To run.\n  Print double of 21.\n";
         // slot tag (it would forge a pointer), but a predicate only reads a
         // tag. It must still fold on the declared type rather than fall
         // through to a runtime compare against an unset r11.
+        //
+        // docs/BUGS_FOUND.md #115 generalised #114's map-value cast to every
+        // dynamically-tagged landing site, `element 3 of m` (m is mixed
+        // after the untyped append) among them: `s`'s declaration now emits
+        // its OWN `cmp r11,` sequence, dispatching the cast that turns the
+        // element's actual runtime tag into `s`'s declared text - entirely
+        // unrelated to, and legitimate alongside, the predicate fold this
+        // test checks. A blanket "no cmp r11 anywhere in the file" assertion
+        // would fail on that unrelated, correct cast, so this checks for the
+        // specific marker the buggy runtime-compare predicate path used to
+        // emit (`cmp r11, N  ; is a text?`, only reachable when
+        // `predicate_static_tag` fails to fold) instead of the whole file.
         let asm = compile_to_asm(
             "a list called m is [\"a\", \"b\"].\n\
              append 42 to m.\n\
@@ -918,7 +940,7 @@ To run.\n  Print double of 21.\n";
              if s is a text, print \"t\".\n",
         );
         assert!(
-            !asm.contains("cmp r11,"),
+            !asm.contains("; is a text?"),
             "an unprovable scalar predicate must fold, not compare a stale r11"
         );
     }
@@ -2856,14 +2878,18 @@ Otherwise, a number called s is 1, append s to out.\n";
         );
     }
 
-    /// A spec that is not a count at all is not a fault - `.2z` is not a
-    /// precision, and never was; it must stay a quiet no-op rather than
-    /// become an error.
+    /// `.2z` is not a precision, and never was: it used to stay a quiet
+    /// no-op, rendering as a bare `{n}` with no diagnostic. #127 overturns
+    /// that - it is a malformed precision, and every clause the table does
+    /// not define is now a compile error (docs/BUGS_FOUND.md #127).
     #[test]
-    fn a_spec_that_is_not_a_count_is_not_a_fault() {
+    fn a_spec_that_is_not_a_count_is_an_unrecognised_specifier() {
         let (spec, fault) = super::read_format_spec(Some(".2z"));
         assert_eq!(spec.precision, None);
-        assert_eq!(fault, None);
+        assert_eq!(
+            fault,
+            Some(super::FormatSpecFault::UnknownSpecifier(".2z".to_string()))
+        );
     }
 
     /// docs/BUGS_FOUND.md #85. A precision written after a width was read
@@ -2905,15 +2931,39 @@ Otherwise, a number called s is 1, append s to out.\n";
         ));
     }
 
-    /// The boundary the fault must not cross: what follows the width has
-    /// to BE a count. `8.` and `8.2z` name no precision, so they stay the
-    /// quiet no-ops they were - the same rule `.2z` follows above.
+    /// A width followed directly by a base letter, with no dot at all, is
+    /// its own legal composition (`{n:04x}`'s row without the zero-pad) -
+    /// `8x` never went near the precision boundary below and is unmoved by
+    /// #127.
     #[test]
-    fn a_width_followed_by_something_that_is_not_a_count_is_not_a_fault() {
-        for spec_text in ["8.", "8.2z", "8x"] {
+    fn a_width_followed_by_a_base_letter_is_not_a_fault() {
+        let (spec, fault) = super::read_format_spec(Some("8x"));
+        assert_eq!(spec.width, Some(8));
+        assert_eq!(spec.base, super::IntegerBase::HexLower);
+        assert_eq!(fault, None);
+    }
+
+    /// What follows a width's `.` has to BE a count, same as a bare
+    /// precision. `8.` and `8.2z` name no precision - they used to stay
+    /// the quiet no-op `{n:8}` is, on the theory that a dangling `.` after
+    /// a width is a different clause shape from an unknown specifier
+    /// letter. #127 retires that theory: the width half is fine, but the
+    /// clause as a whole is still not one the table defines, so it is
+    /// refused exactly as a bare `.2z` now is above
+    /// (docs/BUGS_FOUND.md #127).
+    #[test]
+    fn a_width_followed_by_a_malformed_precision_is_an_unrecognised_specifier() {
+        for spec_text in ["8.", "8.2z"] {
             let (spec, fault) = super::read_format_spec(Some(spec_text));
             assert_eq!(spec.width, Some(8), "width still read from {}", spec_text);
-            assert_eq!(fault, None, "{} is not a fault", spec_text);
+            assert_eq!(
+                fault,
+                Some(super::FormatSpecFault::UnknownSpecifier(
+                    spec_text.to_string()
+                )),
+                "{} names no precision, so the whole clause is unrecognised",
+                spec_text
+            );
         }
     }
 

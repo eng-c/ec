@@ -1,0 +1,15 @@
+(docs/BUGS_FOUND.md #117 - the register's exact repro, correctly closed
+ with the blank line LANGUAGE.md requires to end a function body (the
+ register's own fenced block omitted it, which silently folds every
+ following line into the function and never runs them at all - a
+ different failure from the address leak reported). With the body closed,
+ appending a parameter's text into the caller's list through a function
+ call already prints the value, not an address; pinned here so it cannot
+ regress.)
+
+To 'note' with a list called noted and a text called label.
+    append label to noted.
+
+a list called noted is [].
+'note' of noted and "hi".
+Print "last: {noted's last}".

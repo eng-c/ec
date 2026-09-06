@@ -94,15 +94,20 @@ impl Parser {
     /// ruling (2026-08-23): a library declaration is a top-level construct
     /// like a function or a thing, so one reached while an `If`, a loop, or
     /// a function body is still open is refused here rather than silently
-    /// parsed into that body (BUGS_FOUND #96).
+    /// parsed into that body (BUGS_FOUND #96). Names the specific clause
+    /// still open (BUGS_FOUND #122) via `innermost_open_clause`, rather than
+    /// the generic "an 'If', a loop, or a function body" list this used to
+    /// print regardless of which one actually applied.
     fn err_library_declared_inside_a_block(&self) -> Box<CompileError> {
-        self.err(
+        self.err(&format!(
             "A library declaration is defined at the top level, like a function\n  \
              Canonical form: Library <name> version \"<ver>\".\n  \
-             Move the declaration above the block it is written in: a library's \
-             identity is fixed for the whole program, so a declaration inside an \
-             'If', a loop, or a function body has no scope to belong to."
-        )
+             A definition cannot start inside an open clause, and {} is still open \
+             here: move the declaration above it. A library's identity is fixed for \
+             the whole program, so a declaration reached before the clause closes has \
+             no scope to belong to.",
+            self.innermost_open_clause()
+        ))
     }
 
     pub(crate) fn parse_library_decl(&mut self) -> Result<Statement, Box<CompileError>> {
@@ -394,15 +399,19 @@ impl Parser {
     /// statement of that body (silently changing the control flow of every
     /// statement written after it - BUGS_FOUND #96); it is refused here
     /// instead. The caret lands on `To` itself (BUGS_FOUND #46) because this
-    /// runs before it is consumed.
+    /// runs before it is consumed. Names the specific clause still open
+    /// (BUGS_FOUND #122) via `innermost_open_clause`, rather than the
+    /// generic "an 'If', a loop, or another function's body" list this used
+    /// to print regardless of which one actually applied.
     fn err_function_defined_inside_a_block(&self) -> Box<CompileError> {
-        self.err(
+        self.err(&format!(
             "A function is defined at the top level, like a thing\n  \
              Canonical form: To <function name> with <parameters>. Return a <type>, <expression>.\n  \
-             Move the definition above the block it is written in: a function's \
-             body is not nestable, so a definition inside an 'If', a loop, or \
-             another function's body has no scope to belong to."
-        )
+             A definition cannot start inside an open clause, and {} is still open \
+             here: move the definition above it. A function's body is not nestable, \
+             so a definition reached before the clause closes has no scope to belong to.",
+            self.innermost_open_clause()
+        ))
     }
 
     pub(crate) fn parse_function_def(&mut self) -> Result<Statement, Box<CompileError>> {

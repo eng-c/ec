@@ -1,0 +1,10 @@
+(Best-effort cleanup from any previous run - errors ignored, no On error check)
+Delete the file "/tmp/vox_test_fix121_deleted_file".
+
+open a file for writing called scribe at "/tmp/vox_test_fix121_deleted_file".
+Write "payload" to scribe.
+Close scribe.
+If "/tmp/vox_test_fix121_deleted_file" is available then, Print "before delete: available". Otherwise, Print "before delete: unavailable".
+
+Delete the file "/tmp/vox_test_fix121_deleted_file".
+If "/tmp/vox_test_fix121_deleted_file" is available then, Print "after delete: available". Otherwise, Print "after delete: unavailable".

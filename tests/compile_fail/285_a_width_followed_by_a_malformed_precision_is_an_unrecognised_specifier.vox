@@ -1,0 +1,9 @@
+(Bug #127: a width read cleanly, then a `.` that names no precision -
+ `{n:8.2z}` - used to stay the quiet no-op `{n:8}` is, on the theory that
+ a dangling `.` after a width is a different clause shape from an unknown
+ specifier letter. It is not: the width half is fine, but the clause as a
+ whole is still nothing the table defines, exactly like `{n:8q}` already
+ refused before this fix.)
+
+a number called n is 255.
+Print "{n:8.2z}".

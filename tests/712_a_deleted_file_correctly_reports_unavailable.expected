@@ -1,0 +1,2 @@
+before delete: available
+after delete: unavailable

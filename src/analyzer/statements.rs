@@ -202,6 +202,12 @@ impl Analyzer {
                 DefiniteDeclKind::Plain => {}
             }
         }
+        // docs/BUGS_FOUND.md #123: a name two declarations disagree on the
+        // kind of is poisoned out of the map above, so a function reading it
+        // must not be told it is unknown - the real diagnostic is the
+        // conflict itself, which the linear walk below reports once, at the
+        // second declaration.
+        self.conflicted_globals = collect_conflicted_globals(&program.statements);
 
         // Track the library identity as we walk so each function is filed under
         // its OWN `<lib>_<ver>_<func>` key (a local, not `self.current_library`,
@@ -1505,7 +1511,29 @@ impl Analyzer {
             
             // File I/O statements
             Statement::BufferDecl { name, size } => {
+                // docs/BUGS_FOUND.md #123: every other typed declaration
+                // routes through `Statement::VarDecl`, which checks a
+                // redeclared name against its earlier kind before accepting
+                // it; a buffer's own statement type skipped that check
+                // entirely; a name already declared as something else - a
+                // list, a map, a scalar - was silently re-registered as a
+                // buffer with no diagnostic at all. Reject the conflict here
+                // exactly as `Statement::VarDecl` does, naming both kinds
+                // and anchoring on this, the second, declaration.
+                let redeclaration_conflict = self.is_variable_declared_anywhere(name)
+                    && self.bind_variable_type(
+                        name,
+                        Type::Buffer,
+                        "this declaration",
+                        "declares as",
+                        &[format!("called {} ", name)],
+                        false,
+                    );
                 self.variables.insert(name.clone());
+                if redeclaration_conflict {
+                    self.analyze_expr(size);
+                    return;
+                }
                 self.buffer_variables.insert(name.clone());
                 self.analyze_expr(size);
                 // Every buffer spelling routes here - `is N bytes`, `with

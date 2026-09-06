@@ -1,0 +1,12 @@
+(Compile-fail: BUGS_FOUND #122 - the "definition is not nestable" refusal
+ (#96) named only a generic "an 'If', a loop, or a function body" list
+ regardless of which one actually applied. It now names the specific open
+ clause, so a `To` reached while a `While` loop is open says so by name.)
+
+a number called tries is 0.
+While tries is less than 3,
+    the tries is tries add 1,
+To examine with a value called given.
+    Print "{given's type}".
+
+examine of "".
